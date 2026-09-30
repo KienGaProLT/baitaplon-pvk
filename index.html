@@ -1,0 +1,284 @@
+<!DOCTYPE html>
+<html lang="vi">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>JavaScript Pro Quiz | Ứng Dụng Trắc Nghiệm JS</title>
+  <meta name="description" content="Ứng dụng trắc nghiệm kiến thức JavaScript với giao diện hiện đại, đếm ngược thời gian và giải thích chi tiết." />
+
+  <!-- Google Fonts -->
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Outfit:wght@400;500;600;700;800&family=Plus+Jakarta+Sans:wght@400;500;600;700&display=swap" rel="stylesheet">
+
+  <!-- Stylesheet -->
+  <link rel="stylesheet" href="style.css" />
+</head>
+<body>
+  <!-- Ambient background glowing orbs -->
+  <div class="ambient-glow orb-1"></div>
+  <div class="ambient-glow orb-2"></div>
+
+  <!-- Confetti canvas for victory effect -->
+  <canvas id="confetti-canvas"></canvas>
+
+  <div class="app-container">
+    <!-- Header Bar -->
+    <header class="app-header">
+      <div class="brand">
+        <div class="logo-icon">
+          <span>JS</span>
+        </div>
+        <div class="brand-text">
+          <h1>JavaScript Quiz</h1>
+          <span class="badge">Mastery</span>
+        </div>
+      </div>
+      
+      <div class="header-actions">
+        <!-- Sound toggle button -->
+        <button id="btn-sound-toggle" class="btn-icon" title="Bật/Tắt âm thanh" aria-label="Toggle Sound">
+          <svg id="icon-sound-on" class="svg-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+            <polygon points="11 5 6 9 2 9 2 15 6 15 11 19 11 5"></polygon>
+            <path d="M19.07 4.93a10 10 0 0 1 0 14.14M15.54 8.46a5 5 0 0 1 0 7.07"></path>
+          </svg>
+          <svg id="icon-sound-off" class="svg-icon hidden" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+            <polygon points="11 5 6 9 2 9 2 15 6 15 11 19 11 5"></polygon>
+            <line x1="23" y1="9" x2="17" y2="15"></line>
+            <line x1="17" y1="9" x2="23" y2="15"></line>
+          </svg>
+        </button>
+      </div>
+    </header>
+
+    <!-- Main Card Container -->
+    <main class="quiz-card" id="quiz-main-card">
+      
+      <!-- SCREEN 1: START SCREEN -->
+      <section id="screen-start" class="screen active">
+        <div class="start-hero">
+          <div class="hero-badge">
+            <svg class="svg-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+              <path d="M12 2l3.09 6.26L22 9.27l-5 4.87 1.18 6.88L12 17.77l-6.18 3.25L7 14.14 2 9.27l6.91-1.01L12 2z"></path>
+            </svg>
+            <span>Frontend Challenge 2026</span>
+          </div>
+          <h2 class="hero-title">Thử Thách Kiến Thức <span class="gradient-text">JavaScript</span></h2>
+          <p class="hero-desc">
+            Kiểm tra mức độ thành thạo JavaScript từ cơ bản đến nâng cao: Scope, Closure, Prototype, ES6+, Asynchronous và DOM.
+          </p>
+
+          <div class="features-grid">
+            <div class="feature-item">
+              <div class="feature-icon">
+                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                  <circle cx="12" cy="12" r="10"></circle>
+                  <path d="M9.09 9a3 3 0 0 1 5.83 1c0 2-3 3-3 3"></path>
+                  <line x1="12" y1="17" x2="12.01" y2="17"></line>
+                </svg>
+              </div>
+              <div class="feature-info">
+                <h4>10 Câu Hỏi</h4>
+                <p>Nội dung chất lượng cao</p>
+              </div>
+            </div>
+
+            <div class="feature-item">
+              <div class="feature-icon">
+                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                  <circle cx="12" cy="12" r="10"></circle>
+                  <polyline points="12 6 12 12 16 14"></polyline>
+                </svg>
+              </div>
+              <div class="feature-info">
+                <h4>20 Giây / Câu</h4>
+                <p>Thử thách phản xạ nhanh</p>
+              </div>
+            </div>
+
+            <div class="feature-item">
+              <div class="feature-icon">
+                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                  <path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"></path>
+                  <polyline points="14 2 14 8 20 8"></polyline>
+                  <line x1="16" y1="13" x2="8" y2="13"></line>
+                  <line x1="16" y1="17" x2="8" y2="17"></line>
+                </svg>
+              </div>
+              <div class="feature-info">
+                <h4>Giải Thích Chi Tiết</h4>
+                <p>Học ngay sau mỗi câu</p>
+              </div>
+            </div>
+          </div>
+
+          <div class="start-action">
+            <button id="btn-start" class="btn btn-primary btn-large">
+              <span>Bắt Đầu Làm Bài</span>
+              <svg class="svg-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                <line x1="5" y1="12" x2="19" y2="12"></line>
+                <polyline points="12 5 19 12 12 19"></polyline>
+              </svg>
+            </button>
+            <p class="hint-text">Mẹo: Có thể dùng bàn phím các số 1, 2, 3, 4 để chọn đáp án</p>
+          </div>
+        </div>
+      </section>
+
+      <!-- SCREEN 2: QUIZ PLAY SCREEN -->
+      <section id="screen-quiz" class="screen">
+        <!-- Progress bar -->
+        <div class="quiz-progress-wrapper">
+          <div class="progress-bar-bg">
+            <div id="progress-bar" class="progress-bar-fill" style="width: 0%;"></div>
+          </div>
+        </div>
+
+        <!-- Top status bar: Question Counter & Timer -->
+        <div class="quiz-top-bar">
+          <div class="question-tracker">
+            <span class="label">Câu hỏi</span>
+            <span class="numbers"><strong id="current-q-index">1</strong> / <span id="total-q-count">10</span></span>
+          </div>
+
+          <div class="score-live-badge">
+            <span class="label">Điểm:</span>
+            <strong id="live-score">0</strong>
+          </div>
+
+          <div id="timer-badge" class="timer-badge">
+            <svg class="timer-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+              <circle cx="12" cy="12" r="10"></circle>
+              <polyline points="12 6 12 12 16 14"></polyline>
+            </svg>
+            <span id="timer-seconds">20</span>s
+          </div>
+        </div>
+
+        <!-- Question content -->
+        <div class="question-container">
+          <div class="question-tag" id="question-tag">JavaScript Core</div>
+          <h3 class="question-text" id="question-text">Đang tải câu hỏi...</h3>
+        </div>
+
+        <!-- Options list -->
+        <div class="options-grid" id="options-grid">
+          <!-- Dynamically populated options -->
+        </div>
+
+        <!-- Explanation card (revealed after selection) -->
+        <div id="explanation-box" class="explanation-box hidden">
+          <div class="explanation-header">
+            <div id="explanation-status" class="explanation-status">
+              <!-- Correct / Incorrect icon and text -->
+            </div>
+          </div>
+          <p id="explanation-text" class="explanation-text"></p>
+        </div>
+
+        <!-- Quiz Footer Controls -->
+        <div class="quiz-footer">
+          <div class="footer-hint">
+            <span class="shortcut-badge">1 - 4</span> Chọn đáp án
+            <span class="shortcut-badge">Enter</span> Tiếp theo
+          </div>
+          <button id="btn-next" class="btn btn-primary hidden">
+            <span id="btn-next-text">Câu tiếp theo</span>
+            <svg class="svg-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+              <polyline points="9 18 15 12 9 6"></polyline>
+            </svg>
+          </button>
+        </div>
+      </section>
+
+      <!-- SCREEN 3: RESULT SCREEN -->
+      <section id="screen-result" class="screen">
+        <div class="result-card-inner">
+          <div class="result-trophy">
+            <div class="trophy-circle" id="trophy-badge">🏆</div>
+          </div>
+
+          <h2 class="result-title" id="result-title">Hoàn Thành Bài Thi!</h2>
+          <p class="result-subtitle" id="result-subtitle">Dưới đây là kết quả đánh giá kỹ năng của bạn</p>
+
+          <!-- Circular Score Display -->
+          <div class="score-circle-wrapper">
+            <svg class="score-circle-svg" viewBox="0 0 120 120">
+              <circle class="score-circle-bg" cx="60" cy="60" r="52"></circle>
+              <circle id="score-circle-bar" class="score-circle-bar" cx="60" cy="60" r="52"></circle>
+            </svg>
+            <div class="score-circle-content">
+              <span id="final-score-percent" class="score-percentage">0%</span>
+              <span class="score-ratio"><span id="final-correct-count">0</span> / <span id="final-total-count">10</span> đúng</span>
+            </div>
+          </div>
+
+          <!-- Stats Grid -->
+          <div class="stats-summary-grid">
+            <div class="stat-box">
+              <span class="stat-label">Thời gian</span>
+              <span class="stat-value" id="stat-time-taken">0s</span>
+            </div>
+            <div class="stat-box">
+              <span class="stat-label">Độ chính xác</span>
+              <span class="stat-value" id="stat-accuracy">0%</span>
+            </div>
+            <div class="stat-box">
+              <span class="stat-label">Đánh giá</span>
+              <span class="stat-value" id="stat-grade">Xuất sắc</span>
+            </div>
+          </div>
+
+          <!-- Actions -->
+          <div class="result-actions">
+            <button id="btn-review" class="btn btn-secondary">
+              <svg class="svg-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                <path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z"></path>
+                <circle cx="12" cy="12" r="3"></circle>
+              </svg>
+              <span>Xem Lại Đáp Án</span>
+            </button>
+            <button id="btn-restart" class="btn btn-primary">
+              <svg class="svg-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                <polyline points="1 4 1 10 7 10"></polyline>
+                <path d="M3.51 15a9 9 0 1 0 2.13-9.36L1 10"></path>
+              </svg>
+              <span>Làm Lại Bài Thi</span>
+            </button>
+          </div>
+        </div>
+      </section>
+
+      <!-- SCREEN 4: REVIEW SCREEN -->
+      <section id="screen-review" class="screen">
+        <div class="review-header">
+          <div>
+            <h3>Chi Tiết Câu Trả Lời</h3>
+            <p>Xem lại các lựa chọn và phần giải thích cặn kẽ</p>
+          </div>
+          <button id="btn-back-to-result" class="btn btn-secondary btn-small">
+            <svg class="svg-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+              <line x1="19" y1="12" x2="5" y2="12"></line>
+              <polyline points="12 19 5 12 12 5"></polyline>
+            </svg>
+            <span>Trở về kết quả</span>
+          </button>
+        </div>
+
+        <div id="review-list" class="review-list">
+          <!-- Injected dynamically via JS -->
+        </div>
+      </section>
+
+    </main>
+
+    <!-- Footer note -->
+    <footer class="app-footer">
+      <p>Ứng dụng Quiz chuẩn mô hình cấu trúc 3 phần: HTML (Giao diện) • CSS (Giao diện & Hiệu ứng) • JS (Xử lý Logic) • JSON (Dữ liệu câu hỏi)</p>
+    </footer>
+  </div>
+
+  <!-- JavaScript logic file -->
+  <script src="app.js"></script>
+</body>
+</html>
