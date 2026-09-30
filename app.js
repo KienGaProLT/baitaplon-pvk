@@ -1,7 +1,8 @@
 /**
  * ==========================================================================
  * JavaScript Quiz Application - app.js
- * Quản lý logic xử lý, nạp dữ liệu từ JSON, đếm thời gian, âm thanh & tương tác
+ * Quản lý logic xử lý, nạp dữ liệu từ JSON, đếm thời gian, âm thanh,
+ * hệ thống Đăng nhập (Login), phân quyền Giảng viên / Sinh viên & Quản trị câu hỏi
  * ==========================================================================
  */
 
@@ -94,6 +95,9 @@ class QuizApp {
     // Cấu hình quiz
     this.TIME_PER_QUESTION = 20; // 20 giây mỗi câu
 
+    // Trạng thái phiên người dùng
+    this.currentUser = null; // { username: string, role: 'student' | 'teacher' }
+
     // Trạng thái ứng dụng (State)
     this.questions = [];
     this.currentIndex = 0;
@@ -101,7 +105,7 @@ class QuizApp {
     this.timeLeft = this.TIME_PER_QUESTION;
     this.timerInterval = null;
     this.isAnswered = false;
-    this.userAnswers = []; // Lưu lại lịch sử trả lời: { question, selected, correct, isCorrect }
+    this.userAnswers = []; // Lịch sử trả lời: { question, selected, correct, isCorrect }
     this.startTime = null;
     this.totalTimeTaken = 0;
     this.soundEnabled = true;
@@ -112,17 +116,39 @@ class QuizApp {
     // Cache các phần tử DOM
     this.dom = {
       // Screens
+      screenLogin: document.getElementById('screen-login'),
       screenStart: document.getElementById('screen-start'),
       screenQuiz: document.getElementById('screen-quiz'),
       screenResult: document.getElementById('screen-result'),
       screenReview: document.getElementById('screen-review'),
+      screenAdmin: document.getElementById('screen-admin'),
 
       // Header Controls
+      userHeaderInfo: document.getElementById('user-header-info'),
+      headerUserAvatar: document.getElementById('header-user-avatar'),
+      headerUserName: document.getElementById('header-user-name'),
+      headerUserRole: document.getElementById('header-user-role'),
+      btnHeaderAdmin: document.getElementById('btn-header-admin'),
+      btnLogout: document.getElementById('btn-logout'),
       btnSoundToggle: document.getElementById('btn-sound-toggle'),
       iconSoundOn: document.getElementById('icon-sound-on'),
       iconSoundOff: document.getElementById('icon-sound-off'),
 
+      // Login Screen
+      formLogin: document.getElementById('form-login'),
+      inputUsername: document.getElementById('input-username'),
+      inputPassword: document.getElementById('input-password'),
+      btnTogglePwd: document.getElementById('btn-toggle-pwd'),
+      iconPwdShow: document.getElementById('icon-pwd-show'),
+      iconPwdHide: document.getElementById('icon-pwd-hide'),
+      loginErrorMsg: document.getElementById('login-error-msg'),
+      loginErrorText: document.getElementById('login-error-text'),
+      btnQuickStudent: document.getElementById('btn-quick-student'),
+      btnQuickTeacher: document.getElementById('btn-quick-teacher'),
+
       // Start Screen
+      welcomeUserText: document.getElementById('welcome-user-text'),
+      startTotalQ: document.getElementById('start-total-q'),
       btnStart: document.getElementById('btn-start'),
 
       // Quiz Screen
@@ -158,6 +184,22 @@ class QuizApp {
       btnBackToResult: document.getElementById('btn-back-to-result'),
       reviewList: document.getElementById('review-list'),
 
+      // Admin Screen
+      btnAdminToQuiz: document.getElementById('btn-admin-to-quiz'),
+      adminAlert: document.getElementById('admin-alert'),
+      adminAlertText: document.getElementById('admin-alert-text'),
+      formAddQuestion: document.getElementById('form-add-question'),
+      adminQText: document.getElementById('admin-q-text'),
+      adminOptA: document.getElementById('admin-opt-a'),
+      adminOptB: document.getElementById('admin-opt-b'),
+      adminOptC: document.getElementById('admin-opt-c'),
+      adminOptD: document.getElementById('admin-opt-d'),
+      adminQCorrect: document.getElementById('admin-q-correct'),
+      adminQExplanation: document.getElementById('admin-q-explanation'),
+      adminQCount: document.getElementById('admin-q-count'),
+      adminQuestionsList: document.getElementById('admin-questions-list'),
+      btnResetQuestions: document.getElementById('btn-reset-questions'),
+
       // Canvas Confetti
       confettiCanvas: document.getElementById('confetti-canvas')
     };
@@ -171,12 +213,28 @@ class QuizApp {
   async init() {
     this.bindEvents();
     await this.loadQuestions();
+    this.showScreen('login');
   }
 
   /**
-   * Nạp danh sách câu hỏi từ file questions.json
+   * Nạp danh sách câu hỏi: Ưu tiên dữ liệu lưu trong localStorage (nếu giáo viên đã thêm mới),
+   * sau đó mới nạp từ questions.json hoặc fallback
    */
   async loadQuestions() {
+    const savedCustom = localStorage.getItem('quiz_custom_questions');
+    if (savedCustom) {
+      try {
+        const parsed = JSON.parse(savedCustom);
+        if (Array.isArray(parsed) && parsed.length > 0) {
+          this.questions = parsed;
+          this.updateQuestionsCountDisplay();
+          return;
+        }
+      } catch (e) {
+        console.warn('Lỗi đọc dữ liệu custom từ localStorage:', e);
+      }
+    }
+
     try {
       const response = await fetch('questions.json');
       if (!response.ok) {
@@ -185,65 +243,169 @@ class QuizApp {
       const data = await response.json();
       if (Array.isArray(data) && data.length > 0) {
         this.questions = data;
-        console.log(`Đã nạp thành công ${data.length} câu hỏi từ questions.json`);
       } else {
         throw new Error('Dữ liệu JSON rỗng');
       }
     } catch (err) {
-      console.warn('Không thể nạp trực tiếp questions.json qua fetch (thường do mở trực tiếp bằng giao thức file://), chuyển sang dùng fallback data:', err);
+      console.warn('Không thể nạp trực tiếp questions.json qua fetch, sử dụng fallback data:', err);
       this.questions = [...FALLBACK_QUESTIONS];
     }
+
+    this.updateQuestionsCountDisplay();
+  }
+
+  /**
+   * Lưu danh sách câu hỏi vào localStorage
+   */
+  saveQuestionsToStorage() {
+    try {
+      localStorage.setItem('quiz_custom_questions', JSON.stringify(this.questions));
+    } catch (e) {
+      console.warn('Không thể lưu vào localStorage:', e);
+    }
+    this.updateQuestionsCountDisplay();
+  }
+
+  /**
+   * Cập nhật số lượng câu hỏi trên các màn hình
+   */
+  updateQuestionsCountDisplay() {
+    const count = this.questions.length;
+    if (this.dom.startTotalQ) this.dom.startTotalQ.textContent = count;
+    if (this.dom.totalQCount) this.dom.totalQCount.textContent = count;
+    if (this.dom.adminQCount) this.dom.adminQCount.textContent = count;
   }
 
   /**
    * Gắn các lắng nghe sự kiện
    */
   bindEvents() {
-    // Nút Bắt đầu
+    // 1. Submit Form Đăng nhập
+    this.dom.formLogin.addEventListener('submit', (e) => {
+      e.preventDefault();
+      this.handleLogin();
+    });
+
+    // Ẩn/Hiện mật khẩu
+    this.dom.btnTogglePwd.addEventListener('click', () => {
+      const currentType = this.dom.inputPassword.getAttribute('type');
+      if (currentType === 'password') {
+        this.dom.inputPassword.setAttribute('type', 'text');
+        this.dom.iconPwdShow.classList.add('hidden');
+        this.dom.iconPwdHide.classList.remove('hidden');
+      } else {
+        this.dom.inputPassword.setAttribute('type', 'password');
+        this.dom.iconPwdShow.classList.remove('hidden');
+        this.dom.iconPwdHide.classList.add('hidden');
+      }
+    });
+
+    // Điền tài khoản mẫu Sinh viên
+    this.dom.btnQuickStudent.addEventListener('click', () => {
+      this.dom.inputUsername.value = 'sinhvien_it';
+      this.dom.inputPassword.value = 'student@123';
+      const studentRadio = document.querySelector('input[name="loginRole"][value="student"]');
+      if (studentRadio) studentRadio.checked = true;
+      this.hideLoginError();
+      this.playSound('click');
+    });
+
+    // Điền tài khoản mẫu Giảng viên
+    this.dom.btnQuickTeacher.addEventListener('click', () => {
+      this.dom.inputUsername.value = 'giangvien_cntt';
+      this.dom.inputPassword.value = 'teacher@123';
+      const teacherRadio = document.querySelector('input[name="loginRole"][value="teacher"]');
+      if (teacherRadio) teacherRadio.checked = true;
+      this.hideLoginError();
+      this.playSound('click');
+    });
+
+    // 2. Nút Đăng xuất
+    this.dom.btnLogout.addEventListener('click', () => {
+      this.playSound('click');
+      this.handleLogout();
+    });
+
+    // 3. Nút Quản trị trên Header (dành cho Giảng viên)
+    this.dom.btnHeaderAdmin.addEventListener('click', () => {
+      this.playSound('click');
+      this.clearIntervalTimer();
+      this.showScreen('admin');
+      this.renderAdminQuestions();
+    });
+
+    // 4. Màn hình Bắt đầu (Start Screen) -> Làm bài thi
     this.dom.btnStart.addEventListener('click', () => {
       this.initAudioContext();
       this.playSound('click');
       this.startQuiz();
     });
 
-    // Nút Câu tiếp theo
+    // 5. Nút Câu tiếp theo trong Quiz
     this.dom.btnNext.addEventListener('click', () => {
       this.playSound('click');
       this.nextQuestion();
     });
 
-    // Nút Làm lại bài thi
+    // 6. Nút Làm lại bài thi
     this.dom.btnRestart.addEventListener('click', () => {
       this.playSound('click');
       this.startQuiz();
     });
 
-    // Nút Xem lại đáp án
+    // 7. Nút Xem lại đáp án
     this.dom.btnReview.addEventListener('click', () => {
       this.playSound('click');
       this.showReviewScreen();
     });
 
-    // Nút Quay lại màn hình kết quả từ trang review
+    // 8. Nút Quay lại kết quả từ Review
     this.dom.btnBackToResult.addEventListener('click', () => {
       this.playSound('click');
       this.showScreen('result');
     });
 
-    // Bật/tắt âm thanh
+    // 9. Giảng viên vào làm thử Quiz từ Admin Screen
+    this.dom.btnAdminToQuiz.addEventListener('click', () => {
+      this.playSound('click');
+      this.showScreen('start');
+    });
+
+    // 10. Form Thêm câu hỏi mới (Admin)
+    this.dom.formAddQuestion.addEventListener('submit', (e) => {
+      e.preventDefault();
+      this.handleAddQuestion();
+    });
+
+    // 11. Khôi phục câu hỏi mặc định
+    this.dom.btnResetQuestions.addEventListener('click', () => {
+      if (confirm('Bạn có chắc chắn muốn khôi phục về bộ câu hỏi mặc định không? Các câu hỏi đã thêm thủ công sẽ bị xóa.')) {
+        localStorage.removeItem('quiz_custom_questions');
+        this.questions = [...FALLBACK_QUESTIONS];
+        this.updateQuestionsCountDisplay();
+        this.renderAdminQuestions();
+        this.showAdminAlert('Đã khôi phục bộ 10 câu hỏi mặc định!');
+        this.playSound('correct');
+      }
+    });
+
+    // 12. Bật/tắt âm thanh
     this.dom.btnSoundToggle.addEventListener('click', () => {
       this.toggleSound();
     });
 
-    // Hỗ trợ phím tắt bàn phím: 1, 2, 3, 4 hoặc A, B, C, D và Enter/Space
+    // 13. Hỗ trợ phím tắt bàn phím: 1, 2, 3, 4 hoặc A, B, C, D và Enter/Space
     window.addEventListener('keydown', (e) => {
-      // Chỉ kích hoạt phím tắt khi đang ở màn hình Quiz
+      // Bỏ qua phím tắt nếu con trỏ đang ở trong ô nhập liệu (input, textarea, select)
+      const activeTag = document.activeElement ? document.activeElement.tagName.toLowerCase() : '';
+      if (activeTag === 'input' || activeTag === 'textarea' || activeTag === 'select') return;
+
+      // Chỉ kích hoạt phím tắt trả lời khi đang ở màn hình Quiz
       if (!this.dom.screenQuiz.classList.contains('active')) return;
 
       const key = e.key.toLowerCase();
 
       if (!this.isAnswered) {
-        // Phím 1-4 hoặc A-D
         let selectedIndex = -1;
         if (key === '1' || key === 'a') selectedIndex = 0;
         else if (key === '2' || key === 'b') selectedIndex = 1;
@@ -268,30 +430,250 @@ class QuizApp {
   }
 
   /**
+   * Xử lý Đăng nhập với ràng buộc bảo mật & phân quyền
+   */
+  handleLogin() {
+    const username = this.dom.inputUsername.value.trim();
+    const password = this.dom.inputPassword.value;
+    const selectedRoleEl = document.querySelector('input[name="loginRole"]:checked');
+    let role = selectedRoleEl ? selectedRoleEl.value : 'student';
+
+    // 1. Kiểm tra tên đăng nhập rỗng
+    if (!username) {
+      this.showLoginError('Vui lòng nhập tên đăng nhập!');
+      this.dom.inputUsername.focus();
+      return;
+    }
+
+    // 2. Ràng buộc bảo mật: Mật khẩu BẮT BUỘC phải chứa ký tự '@'
+    if (!password.includes('@')) {
+      this.showLoginError('Mật khẩu không hợp lệ! Bắt buộc phải có chứa ký tự \'@\' theo yêu cầu bảo mật.');
+      this.dom.inputPassword.focus();
+      this.playSound('wrong');
+      return;
+    }
+
+    // Tự động nhận diện quyền Giảng viên nếu mật khẩu hoặc tên có dấu hiệu giảng viên
+    if (password.toLowerCase().includes('teacher') || password.toLowerCase().includes('giangvien')) {
+      role = 'teacher';
+    }
+
+    // Đăng nhập thành công
+    this.hideLoginError();
+    this.currentUser = {
+      username: username,
+      role: role
+    };
+
+    this.initAudioContext();
+    this.playSound('correct');
+
+    // Cập nhật Header Profile
+    this.updateHeaderProfile();
+
+    // Phân quyền điều hướng:
+    if (role === 'teacher') {
+      // Giảng viên -> Chuyển hướng tới Bảng Quản trị câu hỏi
+      this.renderAdminQuestions();
+      this.showScreen('admin');
+    } else {
+      // Sinh viên -> Chuyển hướng vào màn hình làm bài Quiz
+      this.dom.welcomeUserText.textContent = `Xin chào, ${username}! Hãy sẵn sàng thử thách kiến thức nhé.`;
+      this.showScreen('start');
+    }
+  }
+
+  /**
+   * Cập nhật thông tin Header khi người dùng đăng nhập
+   */
+  updateHeaderProfile() {
+    if (!this.currentUser) {
+      this.dom.userHeaderInfo.classList.add('hidden');
+      return;
+    }
+
+    this.dom.userHeaderInfo.classList.remove('hidden');
+    this.dom.headerUserName.textContent = this.currentUser.username;
+
+    if (this.currentUser.role === 'teacher') {
+      this.dom.headerUserAvatar.textContent = '👨‍🏫';
+      this.dom.headerUserRole.textContent = 'Giảng viên';
+      this.dom.headerUserRole.className = 'role-badge role-teacher';
+      this.dom.btnHeaderAdmin.classList.remove('hidden');
+    } else {
+      this.dom.headerUserAvatar.textContent = '👨‍🎓';
+      this.dom.headerUserRole.textContent = 'Sinh viên';
+      this.dom.headerUserRole.className = 'role-badge role-student';
+      this.dom.btnHeaderAdmin.classList.add('hidden');
+    }
+  }
+
+  /**
+   * Xử lý Đăng xuất
+   */
+  handleLogout() {
+    this.clearIntervalTimer();
+    this.currentUser = null;
+    this.dom.userHeaderInfo.classList.add('hidden');
+    this.dom.formLogin.reset();
+    this.hideLoginError();
+    this.showScreen('login');
+  }
+
+  /**
+   * Hiển thị thông báo lỗi đăng nhập
+   */
+  showLoginError(msg) {
+    this.dom.loginErrorText.textContent = msg;
+    this.dom.loginErrorMsg.classList.remove('hidden');
+  }
+
+  /**
+   * Ẩn thông báo lỗi đăng nhập
+   */
+  hideLoginError() {
+    this.dom.loginErrorMsg.classList.add('hidden');
+  }
+
+  /**
+   * Hiển thị thông báo trong màn hình Admin
+   */
+  showAdminAlert(msg) {
+    this.dom.adminAlertText.textContent = msg;
+    this.dom.adminAlert.classList.remove('hidden');
+    setTimeout(() => {
+      this.dom.adminAlert.classList.add('hidden');
+    }, 4000);
+  }
+
+  /**
+   * Xử lý Thêm câu hỏi mới từ Giảng viên
+   */
+  handleAddQuestion() {
+    const qText = this.dom.adminQText.value.trim();
+    const optA = this.dom.adminOptA.value.trim();
+    const optB = this.dom.adminOptB.value.trim();
+    const optC = this.dom.adminOptC.value.trim();
+    const optD = this.dom.adminOptD.value.trim();
+    const correctIdx = parseInt(this.dom.adminQCorrect.value, 10);
+    const explanation = this.dom.adminQExplanation.value.trim();
+
+    if (!qText || !optA || !optB || !optC || !optD || !explanation) {
+      alert('Vui lòng điền đầy đủ tất cả các trường thông tin câu hỏi!');
+      return;
+    }
+
+    const newQuestion = {
+      id: Date.now(),
+      question: qText,
+      options: [optA, optB, optC, optD],
+      correct: correctIdx,
+      explanation: explanation
+    };
+
+    // Thêm vào danh sách câu hỏi
+    this.questions.push(newQuestion);
+    this.saveQuestionsToStorage();
+
+    // Reset form
+    this.dom.formAddQuestion.reset();
+
+    // Cập nhật giao diện
+    this.renderAdminQuestions();
+    this.showAdminAlert(`Đã thêm thành công câu hỏi #${this.questions.length} vào ngân hàng đề!`);
+    this.playSound('correct');
+  }
+
+  /**
+   * Render danh sách câu hỏi trong Bảng Quản trị Giảng viên
+   */
+  renderAdminQuestions() {
+    this.dom.adminQuestionsList.innerHTML = '';
+    const letters = ['A', 'B', 'C', 'D'];
+    this.dom.adminQCount.textContent = this.questions.length;
+
+    this.questions.forEach((q, index) => {
+      const item = document.createElement('div');
+      item.className = 'admin-q-item';
+
+      const correctLetter = letters[q.correct] || 'A';
+      const correctText = q.options[q.correct] || '';
+
+      item.innerHTML = `
+        <div class="admin-q-item-top">
+          <span class="admin-q-num">Câu hỏi ${index + 1}</span>
+          <button type="button" class="btn-delete-q" title="Xóa câu hỏi này" data-index="${index}">
+            ✕
+          </button>
+        </div>
+        <p class="admin-q-item-title">${this.escapeHtml(q.question)}</p>
+        <span class="admin-q-correct-label">✅ Đáp án đúng: ${correctLetter}. ${this.escapeHtml(correctText)}</span>
+      `;
+
+      // Nút xóa câu hỏi
+      const btnDelete = item.querySelector('.btn-delete-q');
+      btnDelete.addEventListener('click', (e) => {
+        e.stopPropagation();
+        this.deleteQuestion(index);
+      });
+
+      this.dom.adminQuestionsList.appendChild(item);
+    });
+  }
+
+  /**
+   * Xóa một câu hỏi khỏi ngân hàng đề
+   */
+  deleteQuestion(index) {
+    if (this.questions.length <= 1) {
+      alert('Ngân hàng đề thi phải giữ lại ít nhất 1 câu hỏi!');
+      return;
+    }
+
+    if (confirm(`Bạn có chắc muốn xóa câu hỏi số ${index + 1} không?`)) {
+      this.questions.splice(index, 1);
+      this.saveQuestionsToStorage();
+      this.renderAdminQuestions();
+      this.showAdminAlert('Đã xóa câu hỏi khỏi ngân hàng đề.');
+      this.playSound('click');
+    }
+  }
+
+  /**
    * Chuyển đổi qua lại giữa các màn hình
    */
   showScreen(screenName) {
     const screens = [
+      this.dom.screenLogin,
       this.dom.screenStart,
       this.dom.screenQuiz,
       this.dom.screenResult,
-      this.dom.screenReview
+      this.dom.screenReview,
+      this.dom.screenAdmin
     ];
 
-    screens.forEach(screen => screen.classList.remove('active'));
+    screens.forEach(screen => {
+      if (screen) screen.classList.remove('active');
+    });
 
     switch (screenName) {
+      case 'login':
+        if (this.dom.screenLogin) this.dom.screenLogin.classList.add('active');
+        break;
       case 'start':
-        this.dom.screenStart.classList.add('active');
+        if (this.dom.screenStart) this.dom.screenStart.classList.add('active');
         break;
       case 'quiz':
-        this.dom.screenQuiz.classList.add('active');
+        if (this.dom.screenQuiz) this.dom.screenQuiz.classList.add('active');
         break;
       case 'result':
-        this.dom.screenResult.classList.add('active');
+        if (this.dom.screenResult) this.dom.screenResult.classList.add('active');
         break;
       case 'review':
-        this.dom.screenReview.classList.add('active');
+        if (this.dom.screenReview) this.dom.screenReview.classList.add('active');
+        break;
+      case 'admin':
+        if (this.dom.screenAdmin) this.dom.screenAdmin.classList.add('active');
         break;
     }
   }
@@ -301,7 +683,7 @@ class QuizApp {
    */
   startQuiz() {
     if (!this.questions || this.questions.length === 0) {
-      alert('Chưa có câu hỏi nào được nạp!');
+      alert('Chưa có câu hỏi nào trong ngân hàng đề!');
       return;
     }
 
@@ -457,7 +839,6 @@ class QuizApp {
 
       if (idx === q.correct) {
         btn.classList.add('correct');
-        // Icon tích xanh
         btn.querySelector('.option-status-icon').innerHTML = `
           <svg class="svg-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5">
             <polyline points="20 6 9 17 4 12"></polyline>
@@ -465,7 +846,6 @@ class QuizApp {
         `;
       } else if (idx === selectedIndex && !isCorrect) {
         btn.classList.add('incorrect');
-        // Icon dấu X đỏ
         btn.querySelector('.option-status-icon').innerHTML = `
           <svg class="svg-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5">
             <line x1="18" y1="6" x2="6" y2="18"></line>
@@ -556,7 +936,6 @@ class QuizApp {
     if (this.currentIndex < this.questions.length) {
       this.renderCurrentQuestion();
     } else {
-      // Đã trả lời hết tất cả các câu
       this.dom.progressBar.style.width = '100%';
       this.finishQuiz();
     }
@@ -623,10 +1002,9 @@ class QuizApp {
     this.dom.resultSubtitle.textContent = subtitle;
 
     // Hiển thị vòng tròn phần trăm (SVG dashoffset)
-    // Bán kính r = 52, Chu vi = 2 * PI * 52 ≈ 326.7
     const circumference = 2 * Math.PI * 52;
     const offset = circumference - (percentage / 100) * circumference;
-    this.dom.scoreCircleBar.style.strokeDashoffset = circumference; // reset
+    this.dom.scoreCircleBar.style.strokeDashoffset = circumference;
     setTimeout(() => {
       this.dom.scoreCircleBar.style.strokeDashoffset = offset;
     }, 100);
@@ -715,7 +1093,7 @@ class QuizApp {
   }
 
   /**
-   * Tổng hợp âm thanh bằng Web Audio API (Không phụ thuộc file mp3 ngoài)
+   * Tổng hợp âm thanh bằng Web Audio API
    */
   playSound(type) {
     if (!this.soundEnabled) return;
@@ -739,7 +1117,6 @@ class QuizApp {
         osc.start(now);
         osc.stop(now + 0.05);
       } else if (type === 'correct') {
-        // Hợp âm 2 nốt trong sáng C5 -> G5
         const notes = [523.25, 783.99];
         notes.forEach((freq, i) => {
           const osc = ctx.createOscillator();
@@ -754,7 +1131,6 @@ class QuizApp {
           osc.stop(now + i * 0.08 + 0.35);
         });
       } else if (type === 'wrong') {
-        // Âm bass báo sai
         const osc = ctx.createOscillator();
         const gain = ctx.createGain();
         osc.type = 'sawtooth';
@@ -778,7 +1154,6 @@ class QuizApp {
         osc.start(now);
         osc.stop(now + 0.04);
       } else if (type === 'victory') {
-        // Fanfare chiến thắng C5 - E5 - G5 - C6
         const arpeggio = [523.25, 659.25, 783.99, 1046.50];
         arpeggio.forEach((freq, idx) => {
           const osc = ctx.createOscillator();
@@ -833,7 +1208,7 @@ class QuizApp {
       particles.forEach(p => {
         p.x += p.vx;
         p.y += p.vy;
-        p.vy += 0.25; // gravity
+        p.vy += 0.25;
         p.alpha -= 0.009;
         p.rotation += p.rotationSpeed;
 
