@@ -2,7 +2,8 @@
  * ==========================================================================
  * JavaScript Quiz Application - app.js
  * Quản lý logic xử lý, nạp dữ liệu từ JSON, đếm thời gian, âm thanh,
- * hệ thống Đăng nhập (Login), phân quyền Giảng viên / Sinh viên & Quản trị câu hỏi
+ * hệ thống Đăng ký / Đăng nhập (Auth), phân quyền Giảng viên & Sinh viên,
+ * lưu trữ tài khoản vào localStorage và Quản trị câu hỏi.
  * ==========================================================================
  */
 
@@ -95,7 +96,10 @@ class QuizApp {
     // Cấu hình quiz
     this.TIME_PER_QUESTION = 20; // 20 giây mỗi câu
 
-    // Trạng thái phiên người dùng
+    // Danh sách tài khoản đã đăng ký (lưu trong localStorage)
+    this.registeredUsers = [];
+
+    // Trạng thái phiên người dùng hiện tại
     this.currentUser = null; // { username: string, role: 'student' | 'teacher' }
 
     // Trạng thái ứng dụng (State)
@@ -134,7 +138,17 @@ class QuizApp {
       iconSoundOn: document.getElementById('icon-sound-on'),
       iconSoundOff: document.getElementById('icon-sound-off'),
 
-      // Login Screen
+      // Auth Tabs & Panels
+      tabBtnLogin: document.getElementById('tab-btn-login'),
+      tabBtnRegister: document.getElementById('tab-btn-register'),
+      panelLogin: document.getElementById('panel-login'),
+      panelRegister: document.getElementById('panel-register'),
+      loginSuccessMsg: document.getElementById('login-success-msg'),
+      loginSuccessText: document.getElementById('login-success-text'),
+      btnSwitchToRegister: document.getElementById('btn-switch-to-register'),
+      btnSwitchToLogin: document.getElementById('btn-switch-to-login'),
+
+      // Login Form
       formLogin: document.getElementById('form-login'),
       inputUsername: document.getElementById('input-username'),
       inputPassword: document.getElementById('input-password'),
@@ -145,6 +159,17 @@ class QuizApp {
       loginErrorText: document.getElementById('login-error-text'),
       btnQuickStudent: document.getElementById('btn-quick-student'),
       btnQuickTeacher: document.getElementById('btn-quick-teacher'),
+
+      // Register Form
+      formRegister: document.getElementById('form-register'),
+      inputRegUsername: document.getElementById('input-reg-username'),
+      inputRegPassword: document.getElementById('input-reg-password'),
+      btnToggleRegPwd: document.getElementById('btn-toggle-reg-pwd'),
+      iconRegPwdShow: document.getElementById('icon-reg-pwd-show'),
+      iconRegPwdHide: document.getElementById('icon-reg-pwd-hide'),
+      regErrorMsg: document.getElementById('reg-error-msg'),
+      regErrorText: document.getElementById('reg-error-text'),
+      btnRegisterSubmit: document.getElementById('btn-register-submit'),
 
       // Start Screen
       welcomeUserText: document.getElementById('welcome-user-text'),
@@ -211,9 +236,53 @@ class QuizApp {
    * Khởi tạo ứng dụng
    */
   async init() {
+    this.loadRegisteredUsers();
     this.bindEvents();
     await this.loadQuestions();
     this.showScreen('login');
+  }
+
+  /**
+   * Nạp danh sách người dùng từ localStorage (kèm tài khoản mẫu mặc định)
+   */
+  loadRegisteredUsers() {
+    const DEFAULT_USERS = [
+      { username: 'sinhvien_it', password: 'student@123', role: 'student', createdAt: Date.now() },
+      { username: 'giangvien_cntt', password: 'teacher@123', role: 'teacher', createdAt: Date.now() }
+    ];
+
+    const saved = localStorage.getItem('quiz_registered_users');
+    if (saved) {
+      try {
+        const parsed = JSON.parse(saved);
+        if (Array.isArray(parsed) && parsed.length > 0) {
+          this.registeredUsers = parsed;
+          // Đảm bảo 2 tài khoản mẫu luôn có mặt để kiểm thử nhanh
+          DEFAULT_USERS.forEach(defU => {
+            if (!this.registeredUsers.some(u => u.username.toLowerCase() === defU.username.toLowerCase())) {
+              this.registeredUsers.push(defU);
+            }
+          });
+          return;
+        }
+      } catch (e) {
+        console.warn('Lỗi đọc quiz_registered_users từ localStorage:', e);
+      }
+    }
+
+    this.registeredUsers = [...DEFAULT_USERS];
+    localStorage.setItem('quiz_registered_users', JSON.stringify(this.registeredUsers));
+  }
+
+  /**
+   * Lưu danh sách người dùng vào localStorage
+   */
+  saveRegisteredUsersToStorage() {
+    try {
+      localStorage.setItem('quiz_registered_users', JSON.stringify(this.registeredUsers));
+    } catch (e) {
+      console.warn('Không thể lưu quiz_registered_users vào localStorage:', e);
+    }
   }
 
   /**
@@ -280,13 +349,39 @@ class QuizApp {
    * Gắn các lắng nghe sự kiện
    */
   bindEvents() {
-    // 1. Submit Form Đăng nhập
+    // 1. Chuyển đổi qua lại giữa Tab Đăng Nhập và Đăng Ký
+    if (this.dom.tabBtnLogin) {
+      this.dom.tabBtnLogin.addEventListener('click', () => {
+        this.playSound('click');
+        this.switchAuthTab('login');
+      });
+    }
+    if (this.dom.tabBtnRegister) {
+      this.dom.tabBtnRegister.addEventListener('click', () => {
+        this.playSound('click');
+        this.switchAuthTab('register');
+      });
+    }
+    if (this.dom.btnSwitchToRegister) {
+      this.dom.btnSwitchToRegister.addEventListener('click', () => {
+        this.playSound('click');
+        this.switchAuthTab('register');
+      });
+    }
+    if (this.dom.btnSwitchToLogin) {
+      this.dom.btnSwitchToLogin.addEventListener('click', () => {
+        this.playSound('click');
+        this.switchAuthTab('login');
+      });
+    }
+
+    // 2. Submit Form Đăng nhập
     this.dom.formLogin.addEventListener('submit', (e) => {
       e.preventDefault();
       this.handleLogin();
     });
 
-    // Ẩn/Hiện mật khẩu
+    // Ẩn/Hiện mật khẩu trong Form Đăng nhập
     this.dom.btnTogglePwd.addEventListener('click', () => {
       const currentType = this.dom.inputPassword.getAttribute('type');
       if (currentType === 'password') {
@@ -299,6 +394,30 @@ class QuizApp {
         this.dom.iconPwdHide.classList.add('hidden');
       }
     });
+
+    // 3. Submit Form Đăng ký (Register)
+    if (this.dom.formRegister) {
+      this.dom.formRegister.addEventListener('submit', (e) => {
+        e.preventDefault();
+        this.handleRegister();
+      });
+    }
+
+    // Ẩn/Hiện mật khẩu trong Form Đăng ký
+    if (this.dom.btnToggleRegPwd) {
+      this.dom.btnToggleRegPwd.addEventListener('click', () => {
+        const currentType = this.dom.inputRegPassword.getAttribute('type');
+        if (currentType === 'password') {
+          this.dom.inputRegPassword.setAttribute('type', 'text');
+          this.dom.iconRegPwdShow.classList.add('hidden');
+          this.dom.iconRegPwdHide.classList.remove('hidden');
+        } else {
+          this.dom.inputRegPassword.setAttribute('type', 'password');
+          this.dom.iconRegPwdShow.classList.remove('hidden');
+          this.dom.iconRegPwdHide.classList.add('hidden');
+        }
+      });
+    }
 
     // Điền tài khoản mẫu Sinh viên
     this.dom.btnQuickStudent.addEventListener('click', () => {
@@ -320,13 +439,13 @@ class QuizApp {
       this.playSound('click');
     });
 
-    // 2. Nút Đăng xuất
+    // 4. Nút Đăng xuất
     this.dom.btnLogout.addEventListener('click', () => {
       this.playSound('click');
       this.handleLogout();
     });
 
-    // 3. Nút Quản trị trên Header (dành cho Giảng viên)
+    // 5. Nút Quản trị trên Header (dành cho Giảng viên)
     this.dom.btnHeaderAdmin.addEventListener('click', () => {
       this.playSound('click');
       this.clearIntervalTimer();
@@ -334,50 +453,50 @@ class QuizApp {
       this.renderAdminQuestions();
     });
 
-    // 4. Màn hình Bắt đầu (Start Screen) -> Làm bài thi
+    // 6. Màn hình Bắt đầu (Start Screen) -> Làm bài thi
     this.dom.btnStart.addEventListener('click', () => {
       this.initAudioContext();
       this.playSound('click');
       this.startQuiz();
     });
 
-    // 5. Nút Câu tiếp theo trong Quiz
+    // 7. Nút Câu tiếp theo trong Quiz
     this.dom.btnNext.addEventListener('click', () => {
       this.playSound('click');
       this.nextQuestion();
     });
 
-    // 6. Nút Làm lại bài thi
+    // 8. Nút Làm lại bài thi
     this.dom.btnRestart.addEventListener('click', () => {
       this.playSound('click');
       this.startQuiz();
     });
 
-    // 7. Nút Xem lại đáp án
+    // 9. Nút Xem lại đáp án
     this.dom.btnReview.addEventListener('click', () => {
       this.playSound('click');
       this.showReviewScreen();
     });
 
-    // 8. Nút Quay lại kết quả từ Review
+    // 10. Nút Quay lại kết quả từ Review
     this.dom.btnBackToResult.addEventListener('click', () => {
       this.playSound('click');
       this.showScreen('result');
     });
 
-    // 9. Giảng viên vào làm thử Quiz từ Admin Screen
+    // 11. Giảng viên vào làm thử Quiz từ Admin Screen
     this.dom.btnAdminToQuiz.addEventListener('click', () => {
       this.playSound('click');
       this.showScreen('start');
     });
 
-    // 10. Form Thêm câu hỏi mới (Admin)
+    // 12. Form Thêm câu hỏi mới (Admin)
     this.dom.formAddQuestion.addEventListener('submit', (e) => {
       e.preventDefault();
       this.handleAddQuestion();
     });
 
-    // 11. Khôi phục câu hỏi mặc định
+    // 13. Khôi phục câu hỏi mặc định
     this.dom.btnResetQuestions.addEventListener('click', () => {
       if (confirm('Bạn có chắc chắn muốn khôi phục về bộ câu hỏi mặc định không? Các câu hỏi đã thêm thủ công sẽ bị xóa.')) {
         localStorage.removeItem('quiz_custom_questions');
@@ -389,12 +508,12 @@ class QuizApp {
       }
     });
 
-    // 12. Bật/tắt âm thanh
+    // 14. Bật/tắt âm thanh
     this.dom.btnSoundToggle.addEventListener('click', () => {
       this.toggleSound();
     });
 
-    // 13. Hỗ trợ phím tắt bàn phím: 1, 2, 3, 4 hoặc A, B, C, D và Enter/Space
+    // 15. Hỗ trợ phím tắt bàn phím: 1, 2, 3, 4 hoặc A, B, C, D và Enter/Space
     window.addEventListener('keydown', (e) => {
       // Bỏ qua phím tắt nếu con trỏ đang ở trong ô nhập liệu (input, textarea, select)
       const activeTag = document.activeElement ? document.activeElement.tagName.toLowerCase() : '';
@@ -430,7 +549,98 @@ class QuizApp {
   }
 
   /**
-   * Xử lý Đăng nhập với ràng buộc bảo mật & phân quyền
+   * Chuyển đổi giữa 2 tab: Đăng nhập (login) và Đăng ký (register)
+   */
+  switchAuthTab(mode) {
+    if (mode === 'login') {
+      if (this.dom.tabBtnLogin) this.dom.tabBtnLogin.classList.add('active');
+      if (this.dom.tabBtnRegister) this.dom.tabBtnRegister.classList.remove('active');
+      if (this.dom.panelLogin) this.dom.panelLogin.classList.remove('hidden');
+      if (this.dom.panelRegister) this.dom.panelRegister.classList.add('hidden');
+      this.hideRegError();
+    } else {
+      if (this.dom.tabBtnRegister) this.dom.tabBtnRegister.classList.add('active');
+      if (this.dom.tabBtnLogin) this.dom.tabBtnLogin.classList.remove('active');
+      if (this.dom.panelRegister) this.dom.panelRegister.classList.remove('hidden');
+      if (this.dom.panelLogin) this.dom.panelLogin.classList.add('hidden');
+      this.hideLoginError();
+      if (this.dom.loginSuccessMsg) this.dom.loginSuccessMsg.classList.add('hidden');
+    }
+  }
+
+  /**
+   * Xử lý ĐĂNG KÝ tài khoản mới (Register)
+   */
+  handleRegister() {
+    const username = this.dom.inputRegUsername.value.trim();
+    const password = this.dom.inputRegPassword.value;
+    const selectedRoleEl = document.querySelector('input[name="registerRole"]:checked');
+    const role = selectedRoleEl ? selectedRoleEl.value : 'student';
+
+    // 1. Kiểm tra tên tài khoản rỗng hoặc quá ngắn
+    if (!username) {
+      this.showRegError('Vui lòng nhập tên tài khoản đăng ký!');
+      this.dom.inputRegUsername.focus();
+      return;
+    }
+    if (username.length < 3) {
+      this.showRegError('Tên tài khoản phải có độ dài từ 3 ký tự trở lên!');
+      this.dom.inputRegUsername.focus();
+      return;
+    }
+
+    // 2. Ràng buộc bảo mật: Mật khẩu BẮT BUỘC phải chứa ký tự '@'
+    if (!password.includes('@')) {
+      this.showRegError("Mật khẩu không hợp lệ! Bắt buộc phải có chứa ký tự '@' theo yêu cầu bảo mật.");
+      this.dom.inputRegPassword.focus();
+      this.playSound('wrong');
+      return;
+    }
+
+    // 3. Kiểm tra trùng lặp tên tài khoản
+    const isExisted = this.registeredUsers.some(
+      u => u.username.toLowerCase() === username.toLowerCase()
+    );
+    if (isExisted) {
+      this.showRegError(`Tài khoản "${username}" đã tồn tại trên hệ thống! Vui lòng chọn tên khác.`);
+      this.dom.inputRegUsername.focus();
+      this.playSound('wrong');
+      return;
+    }
+
+    // 4. Lưu tài khoản mới vào mảng và ghi vào localStorage
+    const newUser = {
+      username: username,
+      password: password,
+      role: role,
+      createdAt: Date.now()
+    };
+
+    this.registeredUsers.push(newUser);
+    this.saveRegisteredUsersToStorage();
+
+    // 5. Hoàn tất đăng ký, xóa form và ẩn thông báo lỗi
+    this.dom.formRegister.reset();
+    this.hideRegError();
+
+    // 6. Tự động chuyển về màn hình đăng nhập
+    this.switchAuthTab('login');
+
+    // 7. Hiển thị thông báo đăng ký thành công
+    const roleLabel = role === 'teacher' ? 'Giảng viên' : 'Sinh viên';
+    this.showLoginSuccess(`🎉 Đăng ký thành công tài khoản "${username}" (${roleLabel})! Mời bạn đăng nhập để bắt đầu.`);
+
+    // 8. Tự động điền trước thông tin vừa tạo vào form đăng nhập để người dùng đăng nhập ngay
+    this.dom.inputUsername.value = username;
+    this.dom.inputPassword.value = password;
+    const matchingLoginRole = document.querySelector(`input[name="loginRole"][value="${role}"]`);
+    if (matchingLoginRole) matchingLoginRole.checked = true;
+
+    this.playSound('correct');
+  }
+
+  /**
+   * Xử lý ĐĂNG NHẬP với dữ liệu đã lưu trong localStorage
    */
   handleLogin() {
     const username = this.dom.inputUsername.value.trim();
@@ -447,21 +657,40 @@ class QuizApp {
 
     // 2. Ràng buộc bảo mật: Mật khẩu BẮT BUỘC phải chứa ký tự '@'
     if (!password.includes('@')) {
-      this.showLoginError('Mật khẩu không hợp lệ! Bắt buộc phải có chứa ký tự \'@\' theo yêu cầu bảo mật.');
+      this.showLoginError("Mật khẩu không hợp lệ! Bắt buộc phải có chứa ký tự '@' theo yêu cầu bảo mật.");
       this.dom.inputPassword.focus();
       this.playSound('wrong');
       return;
     }
 
-    // Tự động nhận diện quyền Giảng viên nếu mật khẩu hoặc tên có dấu hiệu giảng viên
-    if (password.toLowerCase().includes('teacher') || password.toLowerCase().includes('giangvien')) {
-      role = 'teacher';
+    // 3. Tra cứu tài khoản trong danh sách đã đăng ký (hoặc tài khoản mẫu)
+    const foundUser = this.registeredUsers.find(
+      u => u.username.toLowerCase() === username.toLowerCase()
+    );
+
+    if (foundUser) {
+      // Kiểm tra mật khẩu
+      if (foundUser.password !== password) {
+        this.showLoginError('Mật khẩu không chính xác! Vui lòng kiểm tra lại.');
+        this.dom.inputPassword.focus();
+        this.playSound('wrong');
+        return;
+      }
+      // Lấy đúng vai trò đã đăng ký của tài khoản
+      role = foundUser.role;
+    } else {
+      // Tài khoản chưa từng đăng ký
+      this.showLoginError(`Tài khoản "${username}" chưa tồn tại! Vui lòng bấm vào tab 'Đăng Ký' để tạo tài khoản mới.`);
+      this.playSound('wrong');
+      return;
     }
 
-    // Đăng nhập thành công
+    // 4. Đăng nhập thành công
     this.hideLoginError();
+    if (this.dom.loginSuccessMsg) this.dom.loginSuccessMsg.classList.add('hidden');
+
     this.currentUser = {
-      username: username,
+      username: foundUser.username,
       role: role
     };
 
@@ -471,14 +700,14 @@ class QuizApp {
     // Cập nhật Header Profile
     this.updateHeaderProfile();
 
-    // Phân quyền điều hướng:
+    // 5. Phân quyền điều hướng:
     if (role === 'teacher') {
       // Giảng viên -> Chuyển hướng tới Bảng Quản trị câu hỏi
       this.renderAdminQuestions();
       this.showScreen('admin');
     } else {
       // Sinh viên -> Chuyển hướng vào màn hình làm bài Quiz
-      this.dom.welcomeUserText.textContent = `Xin chào, ${username}! Hãy sẵn sàng thử thách kiến thức nhé.`;
+      this.dom.welcomeUserText.textContent = `Xin chào, ${foundUser.username}! Hãy sẵn sàng thử thách kiến thức nhé.`;
       this.showScreen('start');
     }
   }
@@ -516,23 +745,57 @@ class QuizApp {
     this.currentUser = null;
     this.dom.userHeaderInfo.classList.add('hidden');
     this.dom.formLogin.reset();
+    if (this.dom.formRegister) this.dom.formRegister.reset();
     this.hideLoginError();
+    this.hideRegError();
+    if (this.dom.loginSuccessMsg) this.dom.loginSuccessMsg.classList.add('hidden');
+    this.switchAuthTab('login');
     this.showScreen('login');
   }
 
   /**
-   * Hiển thị thông báo lỗi đăng nhập
+   * Hiển thị thông báo lỗi Đăng nhập
    */
   showLoginError(msg) {
     this.dom.loginErrorText.textContent = msg;
     this.dom.loginErrorMsg.classList.remove('hidden');
+    if (this.dom.loginSuccessMsg) this.dom.loginSuccessMsg.classList.add('hidden');
   }
 
   /**
-   * Ẩn thông báo lỗi đăng nhập
+   * Ẩn thông báo lỗi Đăng nhập
    */
   hideLoginError() {
     this.dom.loginErrorMsg.classList.add('hidden');
+  }
+
+  /**
+   * Hiển thị thông báo lỗi Đăng ký
+   */
+  showRegError(msg) {
+    if (this.dom.regErrorText && this.dom.regErrorMsg) {
+      this.dom.regErrorText.textContent = msg;
+      this.dom.regErrorMsg.classList.remove('hidden');
+    }
+  }
+
+  /**
+   * Ẩn thông báo lỗi Đăng ký
+   */
+  hideRegError() {
+    if (this.dom.regErrorMsg) {
+      this.dom.regErrorMsg.classList.add('hidden');
+    }
+  }
+
+  /**
+   * Hiển thị thông báo thành công sau khi Đăng ký
+   */
+  showLoginSuccess(msg) {
+    if (this.dom.loginSuccessMsg && this.dom.loginSuccessText) {
+      this.dom.loginSuccessText.textContent = msg;
+      this.dom.loginSuccessMsg.classList.remove('hidden');
+    }
   }
 
   /**
