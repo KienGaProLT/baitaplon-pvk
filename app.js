@@ -1091,6 +1091,7 @@ class QuizApp {
       this.score++;
       this.dom.liveScore.textContent = this.score * 10;
       this.playSound('correct');
+      this.fireAnswerConfetti();
     } else {
       this.playSound('wrong');
     }
@@ -1238,14 +1239,14 @@ class QuizApp {
       trophy = '🏆';
       title = 'Xuất Sắc Vượt Trội!';
       subtitle = 'Kiến thức JavaScript của bạn cực kỳ vững chắc!';
-      this.triggerConfetti();
+      this.fireVictoryConfetti();
       this.playSound('victory');
     } else if (percentage >= 70) {
       grade = 'Khá giỏi ⭐';
       trophy = '⭐';
       title = 'Làm Tốt Lắm!';
       subtitle = 'Bạn nắm rất chắc các nguyên lý cốt lõi của JavaScript.';
-      this.triggerConfetti();
+      this.fireVictoryConfetti();
       this.playSound('victory');
     } else if (percentage >= 50) {
       grade = 'Đạt yêu cầu 👍';
@@ -1437,64 +1438,70 @@ class QuizApp {
   }
 
   /**
-   * Hiệu ứng pháo hoa Confetti chúc mừng
+   * Hiệu ứng pháo hoa giấy mini khi người dùng trả lời ĐÚNG câu hỏi
+   * Sử dụng thư viện canvas-confetti
    */
-  triggerConfetti() {
-    const canvas = this.dom.confettiCanvas;
-    if (!canvas) return;
-    const ctx = canvas.getContext('2d');
-    canvas.width = window.innerWidth;
-    canvas.height = window.innerHeight;
-
-    const particles = [];
-    const colors = ['#6366f1', '#a855f7', '#ec4899', '#3b82f6', '#10b981', '#f59e0b'];
-
-    for (let i = 0; i < 90; i++) {
-      particles.push({
-        x: canvas.width / 2 + (Math.random() - 0.5) * 200,
-        y: canvas.height / 2 - 50,
-        vx: (Math.random() - 0.5) * 12,
-        vy: (Math.random() - 1.2) * 12,
-        size: Math.random() * 8 + 4,
-        color: colors[Math.floor(Math.random() * colors.length)],
-        rotation: Math.random() * 360,
-        rotationSpeed: (Math.random() - 0.5) * 10,
-        alpha: 1
+  fireAnswerConfetti() {
+    if (typeof confetti === 'function') {
+      confetti({
+        particleCount: 45,
+        spread: 60,
+        origin: { y: 0.72 },
+        colors: ['#10b981', '#34d399', '#6366f1', '#38bdf8', '#fbbf24', '#f43f5e'],
+        disableForReducedMotion: true,
+        zIndex: 9999
       });
     }
+  }
 
-    let animationFrame;
-    const render = () => {
-      ctx.clearRect(0, 0, canvas.width, canvas.height);
-      let aliveCount = 0;
+  /**
+   * Hiệu ứng pháo hoa giấy đại tiệc (Grand Fireworks) khi HOÀN THÀNH XUẤT SẮC bài thi
+   * Bắn pháo hoa liên hoàn từ giữa và 2 bên góc màn hình trong 2.5 giây
+   */
+  fireVictoryConfetti() {
+    if (typeof confetti !== 'function') return;
 
-      particles.forEach(p => {
-        p.x += p.vx;
-        p.y += p.vy;
-        p.vy += 0.25;
-        p.alpha -= 0.009;
-        p.rotation += p.rotationSpeed;
+    // Đợt bùng nổ trung tâm đầu tiên
+    confetti({
+      particleCount: 90,
+      spread: 90,
+      origin: { y: 0.6 },
+      colors: ['#6366f1', '#a855f7', '#ec4899', '#3b82f6', '#10b981', '#f59e0b'],
+      zIndex: 9999
+    });
 
-        if (p.alpha > 0) {
-          aliveCount++;
-          ctx.save();
-          ctx.translate(p.x, p.y);
-          ctx.rotate((p.rotation * Math.PI) / 180);
-          ctx.globalAlpha = Math.max(0, p.alpha);
-          ctx.fillStyle = p.color;
-          ctx.fillRect(-p.size / 2, -p.size / 2, p.size, p.size * 0.6);
-          ctx.restore();
-        }
+    // Bắn liên hoàn đa góc từ 2 bên màn hình trong 2.5 giây
+    const duration = 2500;
+    const animationEnd = Date.now() + duration;
+
+    const interval = setInterval(() => {
+      const timeLeft = animationEnd - Date.now();
+      if (timeLeft <= 0) {
+        return clearInterval(interval);
+      }
+
+      const particleCount = Math.floor(30 * (timeLeft / duration));
+
+      // Bắn pháo hoa từ góc dưới bên trái (góc 60 độ)
+      confetti({
+        particleCount: particleCount,
+        angle: 60,
+        spread: 55,
+        origin: { x: 0, y: 0.75 },
+        colors: ['#6366f1', '#10b981', '#38bdf8', '#ec4899'],
+        zIndex: 9999
       });
 
-      if (aliveCount > 0) {
-        animationFrame = requestAnimationFrame(render);
-      } else {
-        ctx.clearRect(0, 0, canvas.width, canvas.height);
-      }
-    };
-
-    render();
+      // Bắn pháo hoa từ góc dưới bên phải (góc 120 độ)
+      confetti({
+        particleCount: particleCount,
+        angle: 120,
+        spread: 55,
+        origin: { x: 1, y: 0.75 },
+        colors: ['#f59e0b', '#a855f7', '#34d399', '#f43f5e'],
+        zIndex: 9999
+      });
+    }, 250);
   }
 
   /**

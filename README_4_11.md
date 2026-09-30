@@ -55,6 +55,19 @@ baitaplon-pvk/
 
 ---
 
+## 🎉 Hiệu Ứng Pháo Hoa Giấy (Canvas-Confetti)
+
+Dự án tích hợp thư viện **[canvas-confetti](https://www.npmjs.com/package/canvas-confetti)** qua CDN (`jsdelivr`) với 2 kịch bản bắn pháo hoa tự động:
+
+1. **Khi người dùng trả lời ĐÚNG một câu hỏi (`fireAnswerConfetti`)**:
+   - Tự động kích hoạt đợt pháo hoa nhỏ (45 particles, góc mở 60°, màu sắc ngẫu nhiên) phóng lên từ phía dưới câu hỏi để khích lệ người làm bài.
+2. **Khi HOÀN THÀNH XUẤT SẮC bài thi trắc nghiệm (`fireVictoryConfetti`)**:
+   - Khi thí sinh đạt từ **70%** (Khá giỏi) hoặc **90%** (Xuất sắc), màn hình kết quả sẽ kích hoạt màn bắn pháo hoa đại tiệc liên hoàn trong **2.5 giây**:
+     - Đợt pháo hoa lớn bùng nổ ở giữa màn hình.
+     - Pháo hoa góc trái (góc 60°) và góc phải (góc 120°) bắn luân phiên liên tục.
+
+---
+
 ## 💻 Cách Chạy Ứng Dụng
 
 - **Cách 1 (Khuyên dùng)**: Mở thư mục dự án trong VS Code, click chuột phải vào [index.html](file:///c:/baitaplon-pvk/index.html) và chọn **Open with Live Server**.
