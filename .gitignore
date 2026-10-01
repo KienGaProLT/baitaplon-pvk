@@ -1,0 +1,9 @@
+# Bỏ qua các file cấu hình nhạy cảm và biến môi trường
+.env
+
+# Bỏ qua thư mục thư viện tải về
+node_modules/
+
+# Bỏ qua các file rác hệ thống hoặc log
+.DS_Store
+*.log

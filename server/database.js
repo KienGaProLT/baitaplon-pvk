@@ -1,19 +1,38 @@
 /**
  * ==========================================================================
- * Database Module (SQLite) - server/database.js
- * Kết nối CSDL SQLite, tạo các bảng `users`, `questions` và khởi tạo
- * dữ liệu mẫu mặc định (Seed data).
- * Hỗ trợ linh hoạt cả thư viện `sqlite3` và built-in `node:sqlite` của Node.js.
+ * Database Module (Microsoft SQL Server) - server/database.js
+ * Quản lý kết nối CSDL SQL Server sử dụng thư viện `mssql` dựa trên các
+ * biến môi trường trong file `.env`.
+ * Tự động khởi tạo cấu trúc bảng (`users`, `questions`) và nạp dữ liệu mẫu ban đầu.
  * ==========================================================================
  */
 
+const sql = require('mssql');
 const path = require('path');
 const fs = require('fs');
 
-const DB_PATH = path.join(__dirname, 'quiz.db');
 const QUESTIONS_JSON_PATH = path.join(__dirname, '../questions.json');
 
-// Khởi tạo các tài khoản mẫu ban đầu
+// Cấu hình kết nối SQL Server từ các biến môi trường trong file .env
+const dbConfig = {
+  user: process.env.DB_USER || 'sa',
+  password: process.env.DB_PASSWORD || 'your_password',
+  server: process.env.DB_SERVER || 'localhost',
+  database: process.env.DB_DATABASE || 'QuanLyDiemDB',
+  port: parseInt(process.env.DB_PORT, 10) || 1433,
+  options: {
+    encrypt: process.env.DB_ENCRYPT === 'true',
+    trustServerCertificate: process.env.DB_TRUST_SERVER_CERTIFICATE === 'true',
+    enableArithAbort: true
+  },
+  pool: {
+    max: 10,
+    min: 0,
+    idleTimeoutMillis: 30000
+  }
+};
+
+// Tài khoản mẫu ban đầu (Seed data)
 const DEFAULT_USERS = [
   { username: 'sinhvien_it', password: 'student@123', role: 'student' },
   { username: 'giangvien_cntt', password: 'teacher@123', role: 'teacher' }
@@ -93,135 +112,124 @@ const FALLBACK_QUESTIONS = [
   }
 ];
 
-let dbDriver = null;
-let sqlite3Instance = null;
-let nodeSqliteInstance = null;
+let connectionPool = null;
 
-// Khởi tạo adapter cơ sở dữ liệu
-function getDatabase() {
-  if (dbDriver) return dbDriver;
-
-  // Thử dùng sqlite3 thông qua npm package
-  try {
-    const sqlite3 = require('sqlite3').verbose();
-    const db = new sqlite3.Database(DB_PATH);
-    sqlite3Instance = db;
-    dbDriver = 'sqlite3';
-    console.log('[SQLite] Đã kết nối thành công với SQLite (driver: sqlite3) tại:', DB_PATH);
-    return dbDriver;
-  } catch (err) {
-    console.warn('[SQLite] Không nạp được thư viện sqlite3 qua npm, chuyển sang built-in node:sqlite:', err.message);
+/**
+ * Lấy hoặc khởi tạo Connection Pool kết nối với SQL Server
+ */
+async function getPool() {
+  if (connectionPool && connectionPool.connected) {
+    return connectionPool;
   }
 
-  // Thử dùng node:sqlite có sẵn từ Node.js v22.5+
   try {
-    const { DatabaseSync } = require('node:sqlite');
-    nodeSqliteInstance = new DatabaseSync(DB_PATH);
-    dbDriver = 'node:sqlite';
-    console.log('[SQLite] Đã kết nối thành công với SQLite (driver: node:sqlite) tại:', DB_PATH);
-    return dbDriver;
-  } catch (err) {
-    console.error('[SQLite] Không thể khởi tạo SQLite driver:', err);
-    throw err;
+    connectionPool = await sql.connect(dbConfig);
+    console.log(`[SQL Server] Đã kết nối thành công tới Database [${dbConfig.database}] tại máy chủ [${dbConfig.server}:${dbConfig.port}]`);
+    return connectionPool;
+  } catch (error) {
+    console.error(`[SQL Server] Lỗi kết nối CSDL tại [${dbConfig.server}:${dbConfig.port}]:`, error.message);
+    throw error;
   }
 }
 
 /**
- * Thực thi câu lệnh SQL chạy nhiều dòng kết quả (SELECT)
+ * Chuyển đổi câu truy vấn dạng placeholder `?` sang `@p0, @p1, ...`
+ * để tương thích với mssql Request input parameters
  */
-function dbAll(sql, params = []) {
-  getDatabase();
-  return new Promise((resolve, reject) => {
-    if (dbDriver === 'sqlite3') {
-      sqlite3Instance.all(sql, params, (err, rows) => {
-        if (err) return reject(err);
-        resolve(rows || []);
-      });
-    } else {
-      try {
-        const query = nodeSqliteInstance.prepare(sql);
-        const rows = query.all(...params);
-        resolve(rows || []);
-      } catch (err) {
-        reject(err);
-      }
-    }
+function prepareSqlAndInputs(request, sqlString, params = []) {
+  let paramIndex = 0;
+  const transformedSql = sqlString.replace(/\?/g, () => {
+    const paramName = `p${paramIndex}`;
+    const value = params[paramIndex];
+    request.input(paramName, value);
+    paramIndex++;
+    return `@${paramName}`;
   });
+  return transformedSql;
 }
 
 /**
- * Thực thi câu lệnh SQL lấy 1 dòng kết quả (SELECT TOP 1)
+ * Thực thi truy vấn SELECT nhiều dòng dữ liệu (Array of rows)
+ * @param {string} sqlString - Câu lệnh SQL (hỗ trợ cả @p hoặc ?)
+ * @param {Array} params - Mảng tham số truyền vào
  */
-function dbGet(sql, params = []) {
-  getDatabase();
-  return new Promise((resolve, reject) => {
-    if (dbDriver === 'sqlite3') {
-      sqlite3Instance.get(sql, params, (err, row) => {
-        if (err) return reject(err);
-        resolve(row || null);
-      });
-    } else {
-      try {
-        const query = nodeSqliteInstance.prepare(sql);
-        const row = query.get(...params);
-        resolve(row || null);
-      } catch (err) {
-        reject(err);
-      }
-    }
-  });
+async function dbAll(sqlString, params = []) {
+  const pool = await getPool();
+  const request = pool.request();
+  const query = prepareSqlAndInputs(request, sqlString, params);
+  const result = await request.query(query);
+  return result.recordset || [];
+}
+
+/**
+ * Thực thi truy vấn SELECT lấy 1 dòng dữ liệu (First row or null)
+ * @param {string} sqlString - Câu lệnh SQL
+ * @param {Array} params - Mảng tham số
+ */
+async function dbGet(sqlString, params = []) {
+  const rows = await dbAll(sqlString, params);
+  return rows.length > 0 ? rows[0] : null;
 }
 
 /**
  * Thực thi câu lệnh INSERT, UPDATE, DELETE
+ * @param {string} sqlString - Câu lệnh SQL
+ * @param {Array} params - Mảng tham số
  */
-function dbRun(sql, params = []) {
-  getDatabase();
-  return new Promise((resolve, reject) => {
-    if (dbDriver === 'sqlite3') {
-      sqlite3Instance.run(sql, params, function (err) {
-        if (err) return reject(err);
-        resolve({ lastID: this.lastID, changes: this.changes });
-      });
-    } else {
-      try {
-        const query = nodeSqliteInstance.prepare(sql);
-        const result = query.run(...params);
-        resolve({ lastID: result.lastInsertRowid, changes: result.changes });
-      } catch (err) {
-        reject(err);
-      }
-    }
-  });
+async function dbRun(sqlString, params = []) {
+  const pool = await getPool();
+  const request = pool.request();
+
+  // Kiểm tra nếu là INSERT mà chưa có SCOPE_IDENTITY, tự động lấy ID vừa tạo
+  let query = prepareSqlAndInputs(request, sqlString, params);
+  const isInsert = /^\s*INSERT\s+INTO/i.test(query);
+
+  if (isInsert && !/SELECT\s+SCOPE_IDENTITY\(\)/i.test(query)) {
+    query += '; SELECT SCOPE_IDENTITY() AS lastID;';
+  }
+
+  const result = await request.query(query);
+  const lastID = result.recordset && result.recordset[0] ? result.recordset[0].lastID : null;
+  const rowsAffected = result.rowsAffected ? result.rowsAffected[0] : 0;
+
+  return { lastID, changes: rowsAffected };
 }
 
 /**
- * Khởi tạo bảng CSDL và seed dữ liệu nếu bảng rỗng
+ * Khởi tạo cấu trúc các bảng và seed dữ liệu mẫu
  */
 async function initDatabase() {
-  getDatabase();
+  const pool = await getPool();
 
-  // 1. Tạo bảng users
-  await dbRun(`
-    CREATE TABLE IF NOT EXISTS users (
-      id INTEGER PRIMARY KEY AUTOINCREMENT,
-      username TEXT UNIQUE NOT NULL,
-      password TEXT NOT NULL,
-      role TEXT NOT NULL DEFAULT 'student',
-      created_at DATETIME DEFAULT CURRENT_TIMESTAMP
-    )
+  // 1. Tạo bảng users nếu chưa tồn tại
+  await pool.request().query(`
+    IF NOT EXISTS (SELECT * FROM sys.tables WHERE name = 'users')
+    BEGIN
+      CREATE TABLE users (
+        id INT IDENTITY(1,1) PRIMARY KEY,
+        username NVARCHAR(100) UNIQUE NOT NULL,
+        password NVARCHAR(255) NOT NULL,
+        role NVARCHAR(50) NOT NULL DEFAULT 'student',
+        created_at DATETIME DEFAULT GETDATE()
+      );
+      PRINT '[SQL Server] Đã khởi tạo bảng [users].';
+    END
   `);
 
-  // 2. Tạo bảng questions
-  await dbRun(`
-    CREATE TABLE IF NOT EXISTS questions (
-      id INTEGER PRIMARY KEY AUTOINCREMENT,
-      question TEXT NOT NULL,
-      options TEXT NOT NULL,
-      correct INTEGER NOT NULL,
-      explanation TEXT NOT NULL,
-      created_at DATETIME DEFAULT CURRENT_TIMESTAMP
-    )
+  // 2. Tạo bảng questions nếu chưa tồn tại
+  await pool.request().query(`
+    IF NOT EXISTS (SELECT * FROM sys.tables WHERE name = 'questions')
+    BEGIN
+      CREATE TABLE questions (
+        id INT IDENTITY(1,1) PRIMARY KEY,
+        question NVARCHAR(MAX) NOT NULL,
+        options NVARCHAR(MAX) NOT NULL,
+        correct INT NOT NULL,
+        explanation NVARCHAR(MAX) NOT NULL,
+        created_at DATETIME DEFAULT GETDATE()
+      );
+      PRINT '[SQL Server] Đã khởi tạo bảng [questions].';
+    END
   `);
 
   // 3. Seed tài khoản mặc định
@@ -232,13 +240,13 @@ async function initDatabase() {
         `INSERT INTO users (username, password, role) VALUES (?, ?, ?)`,
         [user.username, user.password, user.role]
       );
-      console.log(`[Seed] Đã tạo tài khoản mẫu: ${user.username} (${user.role})`);
+      console.log(`[Seed] Đã tạo tài khoản mẫu trong SQL Server: ${user.username} (${user.role})`);
     }
   }
 
-  // 4. Seed câu hỏi mặc định nếu bảng questions chưa có bản ghi nào
-  const qCountRow = await dbGet(`SELECT COUNT(*) as count FROM questions`);
-  const count = qCountRow ? qCountRow.count : 0;
+  // 4. Seed câu hỏi mặc định nếu bảng questions chưa có câu hỏi nào
+  const countRow = await dbGet(`SELECT COUNT(*) as count FROM questions`);
+  const count = countRow ? countRow.count : 0;
 
   if (count === 0) {
     let questionsToSeed = FALLBACK_QUESTIONS;
@@ -262,15 +270,16 @@ async function initDatabase() {
         [q.question, optionsJson, q.correct, q.explanation]
       );
     }
-    console.log(`[Seed] Đã nạp thành công ${questionsToSeed.length} câu hỏi ban đầu vào SQLite!`);
+    console.log(`[Seed] Đã nạp thành công ${questionsToSeed.length} câu hỏi ban đầu vào SQL Server!`);
   }
 }
 
 /**
- * Đặt lại (Reset) bộ câu hỏi về danh sách mặc định
+ * Khôi phục lại bộ câu hỏi mặc định trong SQL Server
  */
 async function resetDefaultQuestions() {
-  await dbRun(`DELETE FROM questions`);
+  const pool = await getPool();
+  await pool.request().query(`DELETE FROM questions; DBCC CHECKIDENT ('questions', RESEED, 0);`);
 
   let questionsToSeed = FALLBACK_QUESTIONS;
   if (fs.existsSync(QUESTIONS_JSON_PATH)) {
@@ -297,6 +306,9 @@ async function resetDefaultQuestions() {
 }
 
 module.exports = {
+  sql,
+  getPool,
+  dbConfig,
   initDatabase,
   dbAll,
   dbGet,

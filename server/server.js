@@ -2,12 +2,18 @@
  * ==========================================================================
  * Express Server - server/server.js
  * Chạy máy chủ Express, phục vụ API backend và Static Files cho Client.
+ * Tích hợp dotenv để nạp biến môi trường từ file .env.
  * ==========================================================================
  */
 
+const path = require('path');
+
+// Gọi cấu hình môi trường dotenv (ưu tiên file server/.env và fallback root .env)
+require('dotenv').config({ path: path.join(__dirname, '.env') });
+require('dotenv/config');
+
 const express = require('express');
 const cors = require('cors');
-const path = require('path');
 const { initDatabase } = require('./database');
 
 const authRoutes = require('./routes/auth');
@@ -40,6 +46,7 @@ app.use('/api/questions', questionsRoutes);
 app.get('/api/health', (req, res) => {
   res.json({
     status: 'ok',
+    database: 'SQL Server',
     timestamp: new Date().toISOString(),
     uptime: `${Math.round(process.uptime())}s`
   });
@@ -53,9 +60,9 @@ app.get('*', (req, res) => {
 // Khởi chạy CSDL và Server
 async function startServer() {
   try {
-    console.log('[Server] Đang kết nối và khởi tạo CSDL SQLite...');
+    console.log('[Server] Đang kết nối và khởi tạo CSDL SQL Server...');
     await initDatabase();
-    console.log('[Server] CSDL SQLite đã sẵn sàng.');
+    console.log('[Server] CSDL SQL Server đã sẵn sàng.');
 
     app.listen(PORT, () => {
       console.log('========================================================');
@@ -66,7 +73,11 @@ async function startServer() {
       console.log('========================================================');
     });
   } catch (error) {
-    console.error('❌ Không thể khởi động server:', error);
+    console.error('❌ Không thể khởi động server kết nối SQL Server:', error.message);
+    console.error('💡 Vui lòng đảm bảo:');
+    console.error('   1. Dịch vụ Microsoft SQL Server đang chạy.');
+    console.error('   2. Thông tin đăng nhập trong file server/.env là chính xác.');
+    console.error(`   3. Cơ sở dữ liệu [${process.env.DB_DATABASE || 'QuanLyDiemDB'}] đã được tạo trên SQL Server.`);
     process.exit(1);
   }
 }
