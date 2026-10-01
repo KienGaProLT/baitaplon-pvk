@@ -1,78 +1,99 @@
-# Ứng Dụng Quiz Bằng JavaScript Thuần (Vanilla JS)
+# Ứng Dụng Quiz Trắc Nghiệm Full-Stack (Express + SQLite + Vanilla JS)
 
-Dự án trắc nghiệm kiến thức JavaScript với kiến trúc phân tách rõ ràng giữa **Giao diện (UI)**, **Xử lý logic (Auth, Logic & Phân quyền)** và **Dữ liệu câu hỏi (Data JSON)**.
+Dự án trắc nghiệm kiến thức JavaScript được tái cấu trúc theo mô hình **Full-stack phân tách** hoàn chỉnh:
+- **Backend (server/)**: Xây dựng bằng **Node.js & Express**, kết nối cơ sở dữ liệu quan hệ **SQLite** (lưu trữ người dùng và ngân hàng câu hỏi), kiến trúc RESTful API phân tách theo thư mục `routes/`.
+- **Frontend (client/)**: Giao diện thuần **HTML5 / Vanilla CSS3 / Modern Modular JavaScript (ES Modules)** chia tách độc lập (`api.js`, `auth.js`, `quiz.js`, `app.js`).
+- **Quản lý thư viện gốc**: `package.json` quản lý toàn bộ dependencies (`express`, `cors`, `sqlite3`).
 
 ---
 
-## 📁 Cấu Trúc Thư Mục
+## 📁 Cấu Trúc Thư Mục Dự Án
 
 ```text
 baitaplon-pvk/
-├── index.html       # Giao diện HTML (Login, Register, Start, Quiz, Result, Review, Admin)
-├── style.css        # Thiết kế giao diện (CSS Glassmorphism, Auth tabs, animations, responsive)
-├── app.js           # Logic xử lý chính (Class QuizApp, Register/Login, Roles, Timer, Audio synth, Admin)
-├── questions.json   # Dữ liệu ngân hàng câu hỏi trắc nghiệm
-└── README_4_11.md   # Hướng dẫn sử dụng và tài liệu cấu trúc
+├── package.json               # Cấu hình dự án & quản lý dependencies
+├── package-lock.json          # Khóa phiên bản dependencies
+├── questions.json             # Ngân hàng 10 câu hỏi mặc định ban đầu (Seed data)
+├── README_4_11.md             # Tài liệu dự án và hướng dẫn sử dụng
+│
+├── server/                    # [BACKEND] Máy chủ Express & CSDL SQLite
+│   ├── server.js              # Khởi tạo Express server, phục vụ static client và routing API
+│   ├── database.js            # Khởi tạo CSDL SQLite (quiz.db), tạo bảng và seed dữ liệu
+│   ├── quiz.db                # File CSDL SQLite lưu trữ dữ liệu thực tế
+│   └── routes/                # Các router API chuyên biệt
+│       ├── auth.js            # Router API: Đăng ký & Đăng nhập (/api/auth)
+│       └── questions.js       # Router API: Lấy, thêm, xóa, reset câu hỏi (/api/questions)
+│
+└── client/                    # [FRONTEND] Ứng dụng Web giao diện người dùng
+    ├── index.html             # Giao diện chính của ứng dụng
+    ├── css/
+    │   └── style.css          # CSS Glassmorphism, Animations, Responsive
+    └── js/                    # Các module JavaScript độc lập
+        ├── api.js             # Module kết nối và gọi API Backend (fetch)
+        ├── auth.js            # Module xử lý Đăng nhập, Đăng ký, Phân quyền & Profile
+        ├── quiz.js            # Module xử lý Quiz logic, Timer, Âm thanh, Confetti & Admin
+        └── app.js             # Module điều phối chính (App Coordinator)
 ```
 
 ---
 
-## 🔐 Hệ Thống Đăng Ký & Đăng Nhập (Auth System)
+## 🚀 Hướng Dẫn Khởi Chạy Ứng Dụng
 
-### 1. Chuyển đổi qua lại giữa Đăng Nhập & Đăng Ký:
-- Ngay tại màn hình đầu tiên, người dùng có thể chuyển đổi linh hoạt qua lại giữa 2 chế độ thông qua:
-  - **Thanh Tab chuyển đổi trên đầu**: `[ Đăng Nhập ]` và `[ Đăng Ký ]`.
-  - **Dòng liên kết điều hướng ở chân form**: *"Chưa có tài khoản? Đăng ký tài khoản mới"* và *"Đã có tài khoản rồi? Đăng nhập ngay"*.
+### Bước 1: Cài đặt thư viện (nếu chưa chạy)
+Tại thư mục gốc dự án:
+```bash
+npm install
+```
 
-### 2. Quy trình & Ràng buộc khi Đăng ký (Register):
-- **Form Đăng ký gồm**:
-  - Chọn vai trò: **👨‍🎓 Sinh viên** hoặc **👨‍🏫 Giảng viên**.
-  - **Tên tài khoản**: Bắt buộc (tối thiểu 3 ký tự, không được trùng với tài khoản đã có).
-  - **Mật khẩu**: Có nút bật/tắt ẩn hiện mật khẩu.
-  - **Ràng buộc bảo mật**: Mật khẩu **bắt buộc phải có chứa ký tự `@`** (Ví dụ: `nguyena@123`, `giangvien@abc`). Nếu không có ký tự `@`, hệ thống sẽ chặn đăng ký và báo lỗi đỏ.
-- **Cơ chế lưu trữ**:
-  - Dữ liệu tài khoản mới được lưu trực tiếp vào `localStorage` của trình duyệt dưới key `quiz_registered_users`.
-  - Sau khi đăng ký thành công:
-    1. Hệ thống tự động chuyển ngay về màn hình **Đăng nhập**.
-    2. Hiển thị thông báo màu xanh chúc mừng: *"🎉 Đăng ký thành công tài khoản ...! Mời bạn đăng nhập để bắt đầu."*
-    3. Tự động điền trước Tên tài khoản và Mật khẩu vừa tạo vào form đăng nhập để người dùng chỉ cần bấm **"Đăng Nhập Ngay"**.
+### Bước 2: Khởi động máy chủ Express
+Chạy lệnh:
+```bash
+npm start
+```
+*(Hoặc dùng lệnh `npm run dev` để tự động reload khi sửa code server)*
 
-### 3. Phân quyền người dùng sau khi Đăng nhập:
-- **👨‍🎓 Sinh viên (Student)**:
-  - Chuyển hướng đến màn hình chào mừng làm bài thi (**Start Screen**).
-  - Hiển thị lời chào theo tên tài khoản đã đăng ký.
-  - Làm bài thi trắc nghiệm (20s/câu), tính điểm, xem giải thích và xem lại kết quả.
-- **👨‍🏫 Giảng viên (Teacher)**:
-  - Chuyển hướng thẳng vào **Bảng Quản trị (Admin Screen)**.
-  - Thêm câu hỏi mới vào ngân hàng đề (tự lưu vào `localStorage`).
-  - Xóa câu hỏi, quản lý danh sách và kiểm tra bài thi thử.
+### Bước 3: Truy cập ứng dụng
+Mở trình duyệt web và truy cập địa chỉ:
+👉 **`http://localhost:3000`**
 
-### 4. Tài khoản mẫu có sẵn (Có thể dùng ngay không cần đăng ký):
-| Vai trò | Tên đăng nhập | Mật khẩu | Chức năng chính |
+Hệ thống sẽ tự động phục vụ giao diện từ thư mục `client/` và kết nối trực tiếp với backend API.
+
+---
+
+## 📡 Danh Sách API Endpoints (RESTful)
+
+### 1. Nhóm Xác thực & Người dùng (`/api/auth`)
+| Phương thức | Đường dẫn | Chức năng | Body dữ liệu |
 | :--- | :--- | :--- | :--- |
-| **Sinh viên** | `sinhvien_it` | `student@123` | Thi trắc nghiệm |
-| **Giảng viên** | `giangvien_cntt` | `teacher@123` | Quản trị ngân hàng đề thi |
+| `POST` | `/api/auth/register` | Đăng ký tài khoản mới | `{ username, password, role }` |
+| `POST` | `/api/auth/login` | Đăng nhập tài khoản | `{ username, password }` |
+
+### 2. Nhóm Quản trị Câu hỏi (`/api/questions`)
+| Phương thức | Đường dẫn | Chức năng | Body dữ liệu |
+| :--- | :--- | :--- | :--- |
+| `GET` | `/api/questions` | Lấy toàn bộ danh sách câu hỏi | Không |
+| `POST` | `/api/questions` | Thêm câu hỏi mới vào CSDL | `{ question, options, correct, explanation }` |
+| `DELETE` | `/api/questions/:id` | Xóa câu hỏi theo ID | Không |
+| `POST` | `/api/questions/reset` | Khôi phục 10 câu hỏi mặc định | Không |
 
 ---
 
-## 🎉 Hiệu Ứng Pháo Hoa Giấy (Canvas-Confetti)
+## 🔐 Tài Khoản Mẫu Mặc Định (Đã Seed vào SQLite)
 
-Dự án tích hợp thư viện **[canvas-confetti](https://www.npmjs.com/package/canvas-confetti)** qua CDN (`jsdelivr`) với 2 kịch bản bắn pháo hoa tự động:
+| Vai trò | Tên đăng nhập | Mật khẩu | Quyền hạn trong hệ thống |
+| :--- | :--- | :--- | :--- |
+| **Sinh viên** | `sinhvien_it` | `student@123` | Thi trắc nghiệm, bấm giờ, tính điểm, xem giải thích |
+| **Giảng viên** | `giangvien_cntt` | `teacher@123` | Quản trị ngân hàng đề: Thêm / Xóa / Reset câu hỏi, Thi thử |
 
-1. **Khi người dùng trả lời ĐÚNG một câu hỏi (`fireAnswerConfetti`)**:
-   - Tự động kích hoạt đợt pháo hoa nhỏ (45 particles, góc mở 60°, màu sắc ngẫu nhiên) phóng lên từ phía dưới câu hỏi để khích lệ người làm bài.
-2. **Khi HOÀN THÀNH XUẤT SẮC bài thi trắc nghiệm (`fireVictoryConfetti`)**:
-   - Khi thí sinh đạt từ **70%** (Khá giỏi) hoặc **90%** (Xuất sắc), màn hình kết quả sẽ kích hoạt màn bắn pháo hoa đại tiệc liên hoàn trong **2.5 giây**:
-     - Đợt pháo hoa lớn bùng nổ ở giữa màn hình.
-     - Pháo hoa góc trái (góc 60°) và góc phải (góc 120°) bắn luân phiên liên tục.
+> **Quy định bảo mật**: Mọi mật khẩu đăng ký mới **bắt buộc phải có chứa ký tự `@`** (ví dụ: `user@123`).
 
 ---
 
-## 💻 Cách Chạy Ứng Dụng
+## 💎 Điểm Nhấn Công Nghệ
 
-- **Cách 1 (Khuyên dùng)**: Mở thư mục dự án trong VS Code, click chuột phải vào [index.html](file:///c:/baitaplon-pvk/index.html) và chọn **Open with Live Server**.
-- **Cách 2**: Mở terminal tại thư mục dự án và chạy:
-  ```bash
-  npx serve .
-  ```
-- **Cách 3**: Nhấp đúp trực tiếp vào [index.html](file:///c:/baitaplon-pvk/index.html) để mở trên trình duyệt.
+1. **Mô hình Full-stack rõ ràng**: Phân tách hoàn toàn giữa Client (Vanilla JS Modules) và Server (Express REST API).
+2. **Cơ sở dữ liệu SQLite**: Dữ liệu lưu vĩnh viễn trong file `server/quiz.db`, tự động khởi tạo bảng (`users`, `questions`) và nạp dữ liệu mẫu ban đầu.
+3. **Hiệu ứng trực quan & Âm thanh**:
+   - Web Audio API tổng hợp âm thanh trực tiếp không cần file MP3 ngoài.
+   - Thư viện `canvas-confetti` tạo hiệu ứng pháo hoa chúc mừng khi trả lời đúng và khi hoàn thành xuất sắc bài thi.
+4. **Phím tắt nhanh**: Hỗ trợ phím `1`, `2`, `3`, `4` hoặc `A`, `B`, `C`, `D` để chọn đáp án và `Enter`/`Space` để chuyển câu.
