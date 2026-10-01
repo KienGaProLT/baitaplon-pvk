@@ -11,18 +11,21 @@ const sql = require('mssql');
 const path = require('path');
 const fs = require('fs');
 
+// Nạp biến môi trường từ file server/.env
+require('dotenv').config({ path: path.join(__dirname, '.env') });
+
 const QUESTIONS_JSON_PATH = path.join(__dirname, '../questions.json');
 
 // Cấu hình kết nối SQL Server từ các biến môi trường trong file .env
 const dbConfig = {
   user: process.env.DB_USER || 'sa',
-  password: process.env.DB_PASSWORD || 'your_password',
+  password: process.env.DB_PASSWORD || '123456',
   server: process.env.DB_SERVER || 'localhost',
-  database: process.env.DB_DATABASE || 'QuanLyDiemDB',
+  database: process.env.DB_DATABASE || 'QuizDB',
   port: parseInt(process.env.DB_PORT, 10) || 1433,
   options: {
     encrypt: process.env.DB_ENCRYPT === 'true',
-    trustServerCertificate: process.env.DB_TRUST_SERVER_CERTIFICATE === 'true',
+    trustServerCertificate: process.env.DB_TRUST_SERVER_CERTIFICATE !== 'false',
     enableArithAbort: true
   },
   pool: {

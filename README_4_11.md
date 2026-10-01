@@ -45,15 +45,15 @@ File `server/.env` chứa cấu hình kết nối SQL Server:
 ```env
 PORT=3000
 DB_USER=sa
-DB_PASSWORD=your_password
+DB_PASSWORD=123456
 DB_SERVER=localhost
-DB_DATABASE=QuanLyDiemDB
+DB_DATABASE=QuizDB
 DB_PORT=1433
 DB_ENCRYPT=false
 DB_TRUST_SERVER_CERTIFICATE=true
 ```
 
-> **Lưu ý**: Hãy đảm bảo máy chủ Microsoft SQL Server đang hoạt động và cơ sở dữ liệu `QuanLyDiemDB` đã được tạo trước khi khởi động ứng dụng.
+> **Lưu ý**: Hãy đảm bảo máy chủ Microsoft SQL Server đang hoạt động và cơ sở dữ liệu `QuizDB` đã được tạo trước khi khởi động ứng dụng.
 
 ---
 

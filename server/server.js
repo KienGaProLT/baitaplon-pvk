@@ -77,7 +77,7 @@ async function startServer() {
     console.error('💡 Vui lòng đảm bảo:');
     console.error('   1. Dịch vụ Microsoft SQL Server đang chạy.');
     console.error('   2. Thông tin đăng nhập trong file server/.env là chính xác.');
-    console.error(`   3. Cơ sở dữ liệu [${process.env.DB_DATABASE || 'QuanLyDiemDB'}] đã được tạo trên SQL Server.`);
+    console.error(`   3. Cơ sở dữ liệu [${process.env.DB_DATABASE || 'QuizDB'}] đã được tạo trên SQL Server.`);
     process.exit(1);
   }
 }
