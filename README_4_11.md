@@ -107,3 +107,17 @@ Mở trình duyệt web và truy cập địa chỉ:
 | **Giảng viên** | `giangvien_cntt` | `teacher@123` | Quản trị ngân hàng đề: Thêm / Xóa / Reset câu hỏi, Thi thử |
 
 > **Quy định bảo mật**: Mọi mật khẩu đăng ký mới **bắt buộc phải có chứa ký tự `@`** (ví dụ: `user@123`).
+
+---
+
+## 🌓 Tính Năng Chuyển Đổi Sáng / Tối (Dark & Light Mode)
+
+- **Vị trí nút bấm**: Nằm ở góc trên bên phải thanh Header (`#btn-theme-toggle`), bên cạnh nút Bật/Tắt âm thanh.
+- **Chế độ Sáng (Light Mode - Mặc định)**:
+  - Tông màu sáng thanh lịch, độ tương phản cao, dịu mắt.
+  - Hiển thị icon **Mặt trăng 🌙** để chuyển sang Dark Mode.
+- **Chế độ Tối (Dark Mode)**:
+  - Nền tối chuẩn màu `#121212`, chữ sáng `#f0f0f0` chống mỏi mắt.
+  - Hiển thị icon **Mặt trời ☀️** để chuyển về Light Mode.
+- **Lưu trữ trạng thái tự động**: Lựa chọn của người dùng được lưu trực tiếp vào `localStorage` (key: `quiz_theme_mode`). Khi tải lại trang web, hệ thống tự động nhận diện và áp dụng ngay lập tức mà không gây chớp nháy giao diện.
+

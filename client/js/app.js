@@ -50,6 +50,9 @@ class App {
       btnSoundToggle: document.getElementById('btn-sound-toggle'),
       iconSoundOn: document.getElementById('icon-sound-on'),
       iconSoundOff: document.getElementById('icon-sound-off'),
+      btnThemeToggle: document.getElementById('btn-theme-toggle'),
+      iconThemeMoon: document.getElementById('icon-theme-moon'),
+      iconThemeSun: document.getElementById('icon-theme-sun'),
 
       // Auth Tabs & Panels
       tabBtnLogin: document.getElementById('tab-btn-login'),
@@ -147,10 +150,13 @@ class App {
    * Khởi tạo ứng dụng
    */
   async init() {
-    // 1. Tải danh sách câu hỏi từ CSDL SQLite qua API
+    // 1. Khởi tạo chế độ Sáng / Tối (Light / Dark Mode)
+    this.initTheme();
+
+    // 2. Tải danh sách câu hỏi từ CSDL qua API
     await this.quiz.loadQuestions();
 
-    // 2. Gắn sự kiện nút Quản trị trên Header (Giảng viên)
+    // 3. Gắn sự kiện nút Quản trị trên Header (Giảng viên)
     if (this.dom.btnHeaderAdmin) {
       this.dom.btnHeaderAdmin.addEventListener('click', () => {
         this.quiz.playSound('click');
@@ -160,13 +166,65 @@ class App {
       });
     }
 
-    // 3. Kiểm tra xem người dùng đã đăng nhập từ trước chưa
+    // 4. Kiểm tra xem người dùng đã đăng nhập từ trước chưa
     const currentUser = this.auth.getCurrentUser();
     if (currentUser) {
       this.handleLoginSuccess(currentUser);
     } else {
       this.showScreen('login');
     }
+  }
+
+  /**
+   * Khởi tạo giao diện Sáng / Tối (Dark / Light Mode)
+   * Mặc định là Light Mode; đọc trạng thái đã lưu từ localStorage
+   */
+  initTheme() {
+    const savedTheme = localStorage.getItem('quiz_theme_mode') || 'light';
+    this.applyTheme(savedTheme);
+
+    if (this.dom.btnThemeToggle) {
+      this.dom.btnThemeToggle.addEventListener('click', () => {
+        this.toggleTheme();
+      });
+    }
+  }
+
+  /**
+   * Áp dụng theme và cập nhật icon tương ứng
+   */
+  applyTheme(theme) {
+    const isDark = (theme === 'dark');
+
+    if (isDark) {
+      document.documentElement.classList.add('dark-mode');
+      document.body.classList.add('dark-mode');
+      if (this.dom.iconThemeMoon) this.dom.iconThemeMoon.classList.add('hidden');
+      if (this.dom.iconThemeSun) this.dom.iconThemeSun.classList.remove('hidden');
+    } else {
+      document.documentElement.classList.remove('dark-mode');
+      document.body.classList.remove('dark-mode');
+      if (this.dom.iconThemeMoon) this.dom.iconThemeMoon.classList.remove('hidden');
+      if (this.dom.iconThemeSun) this.dom.iconThemeSun.classList.add('hidden');
+    }
+  }
+
+  /**
+   * Chuyển đổi qua lại giữa Light Mode và Dark Mode và lưu vào localStorage
+   */
+  toggleTheme() {
+    const isCurrentlyDark = document.body.classList.contains('dark-mode') || document.documentElement.classList.contains('dark-mode');
+    const newTheme = isCurrentlyDark ? 'light' : 'dark';
+
+    this.applyTheme(newTheme);
+
+    try {
+      localStorage.setItem('quiz_theme_mode', newTheme);
+    } catch (e) {
+      console.warn('Không thể lưu theme vào localStorage:', e);
+    }
+
+    this.quiz.playSound('click');
   }
 
   /**
