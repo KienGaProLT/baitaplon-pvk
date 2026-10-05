@@ -93,14 +93,17 @@ const FALLBACK_QUESTIONS = [
 ];
 
 export class QuizManager {
-  constructor(dom, showScreenFn) {
+  constructor(dom, showScreenFn, getCurrentUserFn) {
     this.dom = dom;
     this.showScreen = showScreenFn;
+    this.getCurrentUser = getCurrentUserFn;
 
     // Cấu hình thời gian
     this.TIME_PER_QUESTION = 20;
 
-    // Trạng thái Quiz
+    // Trạng thái Quiz & Quizzes List
+    this.quizzes = [];
+    this.currentQuiz = null;
     this.questions = [];
     this.currentIndex = 0;
     this.score = 0;
@@ -119,7 +122,145 @@ export class QuizManager {
   }
 
   /**
-   * Tải danh sách câu hỏi từ API Express (SQLite)
+   * 1. Tải danh sách tất cả các bài trắc nghiệm từ API (GET /api/quizzes)
+   */
+  async loadQuizzes() {
+    if (this.dom.quizzesGrid) {
+      this.dom.quizzesGrid.innerHTML = `
+        <div class="quizzes-loading-state">
+          <span class="loading-spinner"></span>
+          <p>Đang tải danh sách bài trắc nghiệm từ máy chủ SQL Server...</p>
+        </div>
+      `;
+    }
+
+    const res = await api.getQuizzes();
+
+    let list = [];
+    if (res.ok) {
+      if (Array.isArray(res.data)) {
+        list = res.data;
+      } else if (res.data && Array.isArray(res.data.quizzes)) {
+        list = res.data.quizzes;
+      }
+    }
+
+    this.quizzes = list;
+    this.renderQuizzesList();
+  }
+
+  /**
+   * Render danh sách thẻ bài trắc nghiệm ra giao diện Trang chủ
+   */
+  renderQuizzesList() {
+    if (!this.dom.quizzesGrid) return;
+    this.dom.quizzesGrid.innerHTML = '';
+
+    const count = this.quizzes.length;
+    if (this.dom.quizzesCountBadge) {
+      this.dom.quizzesCountBadge.textContent = `${count} bài thi`;
+    }
+
+    if (count === 0) {
+      this.dom.quizzesGrid.innerHTML = `
+        <div class="quizzes-empty-state">
+          <p>Hiện chưa có bài trắc nghiệm nào trong cơ sở dữ liệu.</p>
+          <p class="hint-text">Giảng viên có thể dùng form bên trên để tạo bài trắc nghiệm đầu tiên.</p>
+        </div>
+      `;
+      return;
+    }
+
+    this.quizzes.forEach((quiz, index) => {
+      const card = document.createElement('div');
+      card.className = 'quiz-card-item';
+
+      const questionCount = quiz.question_count !== undefined ? quiz.question_count : 0;
+      const creatorName = quiz.creator_name ? quiz.creator_name : (quiz.created_by ? `GV #${quiz.created_by}` : 'Hệ thống');
+
+      card.innerHTML = `
+        <div class="quiz-card-top">
+          <div class="quiz-card-icon">📝</div>
+          <span class="quiz-badge-pill">${questionCount > 0 ? `${questionCount} câu hỏi` : 'Đề thi trắc nghiệm'}</span>
+        </div>
+        <h4 class="quiz-card-title">${this.escapeHtml(quiz.title)}</h4>
+        <p class="quiz-card-desc">${this.escapeHtml(quiz.description || 'Bài thi trắc nghiệm đánh giá kiến thức chuyên môn.')}</p>
+        <div class="quiz-card-meta">
+          <span class="quiz-meta-item">⏱️ 20 giây / câu</span>
+          <span class="quiz-meta-item">👨‍🏫 ${this.escapeHtml(creatorName)}</span>
+        </div>
+        <button type="button" class="btn btn-primary btn-select-quiz" data-id="${quiz.id}">
+          <span>Bắt Đầu Làm Bài</span>
+          <svg class="svg-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+            <polyline points="9 18 15 12 9 6"></polyline>
+          </svg>
+        </button>
+      `;
+
+      const btnSelect = card.querySelector('.btn-select-quiz');
+      btnSelect.addEventListener('click', () => {
+        this.initAudioContext();
+        this.playSound('click');
+        this.selectAndStartQuiz(quiz);
+      });
+
+      this.dom.quizzesGrid.appendChild(card);
+    });
+  }
+
+  /**
+   * 2. Chọn một bài trắc nghiệm và tải câu hỏi theo quiz_id (GET /api/quizzes/:id/questions)
+   * @param {Object} quiz - Đối tượng bài trắc nghiệm được chọn
+   */
+  async selectAndStartQuiz(quiz) {
+    this.currentQuiz = quiz;
+
+    if (this.dom.activeQuizTitle) {
+      this.dom.activeQuizTitle.textContent = quiz.title;
+    }
+
+    // Gọi API lấy danh sách câu hỏi theo quiz_id
+    const res = await api.getQuizQuestions(quiz.id);
+
+    let fetchedQuestions = [];
+    if (res.ok) {
+      if (Array.isArray(res.data)) {
+        fetchedQuestions = res.data;
+      } else if (res.data && Array.isArray(res.data.questions)) {
+        fetchedQuestions = res.data.questions;
+      }
+    }
+
+    if (fetchedQuestions.length > 0) {
+      this.questions = fetchedQuestions.map(q => {
+        let options = q.options;
+        if (typeof options === 'string') {
+          try {
+            options = JSON.parse(options);
+          } catch (e) {
+            options = [];
+          }
+        }
+        return {
+          id: q.id,
+          quizId: q.quiz_id || q.quizId,
+          question: q.question,
+          options: Array.isArray(options) ? options : [],
+          correct: Number(q.correct),
+          explanation: q.explanation || 'Không có giải thích chi tiết.'
+        };
+      });
+    } else {
+      alert(`Bài trắc nghiệm "${quiz.title}" hiện chưa có câu hỏi nào trong ngân hàng đề. Vui lòng thêm câu hỏi trước khi thi!`);
+      return;
+    }
+
+    this.updateQuestionsCountDisplay();
+    this.startQuiz();
+  }
+
+  /**
+   * Tải danh sách câu hỏi mặc định/toàn bộ từ API Express
    */
   async loadQuestions() {
     const res = await api.getQuestions();
@@ -145,19 +286,51 @@ export class QuizManager {
   }
 
   /**
-   * Gắn các sự kiện của Quiz và Admin
+   * Gắn các sự kiện của Quiz, Quản trị và Form Giảng viên
    */
   bindEvents() {
-    // Nút Bắt đầu làm bài
+    // Nút Bắt đầu làm bài (Legacy/hero nếu còn dùng)
     if (this.dom.btnStart) {
       this.dom.btnStart.addEventListener('click', () => {
         this.initAudioContext();
         this.playSound('click');
-        this.startQuiz();
+        if (this.quizzes && this.quizzes.length > 0) {
+          this.selectAndStartQuiz(this.quizzes[0]);
+        } else {
+          this.startQuiz();
+        }
       });
     }
 
-    // Nút Chuyển câu tiếp theo
+    // Nút Tải lại danh sách bài trắc nghiệm
+    if (this.dom.btnRefreshQuizzes) {
+      this.dom.btnRefreshQuizzes.addEventListener('click', () => {
+        this.playSound('click');
+        this.loadQuizzes();
+      });
+    }
+
+    // Form Giảng viên Tạo bài trắc nghiệm mới
+    if (this.dom.formCreateQuiz) {
+      this.dom.formCreateQuiz.addEventListener('submit', (e) => {
+        e.preventDefault();
+        this.handleCreateQuiz();
+      });
+    }
+
+    // Nút Thoát ra danh sách bài thi khi đang làm bài
+    if (this.dom.btnExitToQuizzes) {
+      this.dom.btnExitToQuizzes.addEventListener('click', () => {
+        if (confirm('Bạn có chắc muốn dừng bài thi hiện tại và quay về danh sách bài trắc nghiệm?')) {
+          this.clearIntervalTimer();
+          this.playSound('click');
+          this.showScreen('start');
+          this.loadQuizzes();
+        }
+      });
+    }
+
+    // Nút Chuyển câu tiếp theo / Nộp bài
     if (this.dom.btnNext) {
       this.dom.btnNext.addEventListener('click', () => {
         this.playSound('click');
@@ -165,11 +338,27 @@ export class QuizManager {
       });
     }
 
-    // Nút Làm lại bài thi
+    // Nút Làm lại bài thi (Retake) - Reset trạng thái và thi lại chính bài hiện tại
     if (this.dom.btnRestart) {
       this.dom.btnRestart.addEventListener('click', () => {
         this.playSound('click');
-        this.startQuiz();
+        if (this.currentQuiz && this.questions && this.questions.length > 0) {
+          this.startQuiz();
+        } else if (this.quizzes && this.quizzes.length > 0) {
+          this.selectAndStartQuiz(this.quizzes[0]);
+        } else {
+          this.showScreen('start');
+          this.loadQuizzes();
+        }
+      });
+    }
+
+    // Nút Quay về Danh Sách Bài Thi từ màn hình Kết Quả
+    if (this.dom.btnBackToQuizzes) {
+      this.dom.btnBackToQuizzes.addEventListener('click', () => {
+        this.playSound('click');
+        this.showScreen('start');
+        this.loadQuizzes();
       });
     }
 
@@ -194,6 +383,7 @@ export class QuizManager {
       this.dom.btnAdminToQuiz.addEventListener('click', () => {
         this.playSound('click');
         this.showScreen('start');
+        this.loadQuizzes();
       });
     }
 
@@ -286,7 +476,10 @@ export class QuizManager {
     const progressPercent = (this.currentIndex / total) * 100;
     this.dom.progressBar.style.width = `${progressPercent}%`;
 
-    // Hiển thị câu hỏi
+    // Cập nhật tag phân loại và câu hỏi
+    if (this.dom.questionTag) {
+      this.dom.questionTag.textContent = this.currentQuiz?.title ? this.currentQuiz.title : 'Câu hỏi trắc nghiệm';
+    }
     this.dom.questionText.textContent = q.question;
 
     // Ẩn hộp giải thích & nút next
@@ -295,7 +488,7 @@ export class QuizManager {
     this.dom.btnNext.classList.add('hidden');
 
     if (this.currentIndex === total - 1) {
-      this.dom.btnNextText.textContent = 'Xem Kết Quả';
+      this.dom.btnNextText.textContent = 'Nộp Bài & Xem Điểm';
     } else {
       this.dom.btnNextText.textContent = 'Câu Tiếp Theo';
     }
@@ -506,14 +699,14 @@ export class QuizManager {
   }
 
   /**
-   * Hoàn thành bài thi và hiển thị kết quả
+   * 3. Hoàn thành bài thi, hiển thị điểm số chi tiết và lưu kết quả vào CSDL
    */
-  finishQuiz() {
+  async finishQuiz() {
     this.clearIntervalTimer();
     this.totalTimeTaken = Math.round((Date.now() - this.startTime) / 1000);
 
     const total = this.questions.length;
-    const percentage = Math.round((this.score / total) * 100);
+    const percentage = total > 0 ? Math.round((this.score / total) * 100) : 0;
 
     this.dom.finalScorePercent.textContent = `${percentage}%`;
     this.dom.finalCorrectCount.textContent = this.score;
@@ -533,14 +726,14 @@ export class QuizManager {
       grade = 'Thần sầu 🚀';
       trophy = '🏆';
       title = 'Xuất Sắc Vượt Trội!';
-      subtitle = 'Kiến thức JavaScript của bạn cực kỳ vững chắc!';
+      subtitle = 'Kiến thức của bạn cực kỳ vững chắc!';
       this.fireVictoryConfetti();
       this.playSound('victory');
     } else if (percentage >= 70) {
       grade = 'Khá giỏi ⭐';
       trophy = '⭐';
       title = 'Làm Tốt Lắm!';
-      subtitle = 'Bạn nắm rất chắc các nguyên lý cốt lõi của JavaScript.';
+      subtitle = 'Bạn nắm rất chắc các nguyên lý cốt lõi.';
       this.fireVictoryConfetti();
       this.playSound('victory');
     } else if (percentage >= 50) {
@@ -566,6 +759,29 @@ export class QuizManager {
     setTimeout(() => {
       this.dom.scoreCircleBar.style.strokeDashoffset = offset;
     }, 100);
+
+    // Gửi yêu cầu lưu kết quả bài thi qua API (POST /api/quiz-results)
+    try {
+      const currentUser = this.getCurrentUser ? this.getCurrentUser() : null;
+      const resultPayload = {
+        userId: currentUser ? currentUser.id : null,
+        quizId: this.currentQuiz ? this.currentQuiz.id : null,
+        score: percentage,
+        correctAnswers: this.score,
+        totalQuestions: total,
+        timeSpent: this.totalTimeTaken
+      };
+
+      const saveRes = await api.saveQuizResult(resultPayload);
+      if (saveRes.ok && saveRes.data.success) {
+        console.log('[Quiz] Đã lưu kết quả thi vào SQL Server:', saveRes.data);
+        if (this.dom.resultSavedBadge) {
+          this.dom.resultSavedBadge.classList.remove('hidden');
+        }
+      }
+    } catch (err) {
+      console.warn('[Quiz] Lỗi lưu kết quả bài thi:', err);
+    }
 
     this.showScreen('result');
   }
@@ -750,6 +966,84 @@ export class QuizManager {
     setTimeout(() => {
       this.dom.adminAlert.classList.add('hidden');
     }, 4000);
+  }
+
+  /**
+   * 4. Giảng viên Tạo bài trắc nghiệm mới (POST /api/quizzes)
+   */
+  async handleCreateQuiz() {
+    const title = this.dom.newQuizTitle?.value?.trim();
+    const desc = this.dom.newQuizDesc?.value?.trim() || '';
+
+    if (!title) {
+      alert('Vui lòng nhập tiêu đề bài trắc nghiệm!');
+      return;
+    }
+
+    const currentUser = this.getCurrentUser ? this.getCurrentUser() : null;
+    const questions = [];
+
+    // Kiểm tra câu hỏi đầu tiên nếu có nhập
+    const qText = this.dom.newQText?.value?.trim();
+    const optA = this.dom.newOptA?.value?.trim();
+    const optB = this.dom.newOptB?.value?.trim();
+    const optC = this.dom.newOptC?.value?.trim();
+    const optD = this.dom.newOptD?.value?.trim();
+    const correctIdx = parseInt(this.dom.newQCorrect?.value || '0', 10);
+    const explanation = this.dom.newQExplanation?.value?.trim() || 'Đáp án chính xác!';
+
+    if (qText) {
+      const options = [];
+      if (optA) options.push(optA);
+      if (optB) options.push(optB);
+      if (optC) options.push(optC);
+      if (optD) options.push(optD);
+
+      if (options.length >= 2) {
+        questions.push({
+          question: qText,
+          options: options,
+          correct: correctIdx < options.length ? correctIdx : 0,
+          explanation: explanation
+        });
+      }
+    }
+
+    const quizPayload = {
+      title: title,
+      description: desc,
+      created_by: currentUser ? currentUser.id : null,
+      questions: questions
+    };
+
+    const res = await api.createQuiz(quizPayload);
+
+    if (res.ok && res.data.success) {
+      if (this.dom.formCreateQuiz) {
+        this.dom.formCreateQuiz.reset();
+      }
+      this.showTeacherQuizAlert(`🎉 Tạo bài trắc nghiệm "${title}" thành công!`);
+      this.playSound('correct');
+      // Tải lại danh sách bài trắc nghiệm ngay lập tức trên trang chủ
+      await this.loadQuizzes();
+    } else {
+      alert(res.data?.message || 'Không thể tạo bài trắc nghiệm mới!');
+    }
+  }
+
+  /**
+   * Hiển thị thông báo khi tạo bài trắc nghiệm mới
+   */
+  showTeacherQuizAlert(msg) {
+    if (this.dom.teacherQuizAlert && this.dom.teacherQuizAlertText) {
+      this.dom.teacherQuizAlertText.textContent = msg;
+      this.dom.teacherQuizAlert.classList.remove('hidden');
+      setTimeout(() => {
+        if (this.dom.teacherQuizAlert) {
+          this.dom.teacherQuizAlert.classList.add('hidden');
+        }
+      }, 5000);
+    }
   }
 
   /**

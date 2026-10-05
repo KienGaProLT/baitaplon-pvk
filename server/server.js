@@ -18,6 +18,8 @@ const { initDatabase } = require('./database');
 
 const authRoutes = require('./routes/auth');
 const questionsRoutes = require('./routes/questions');
+const quizzesRoutes = require('./routes/quizzes');
+const quizResultsRoutes = require('./routes/quizResults');
 
 const app = express();
 const PORT = process.env.PORT || 3000;
@@ -41,6 +43,8 @@ app.use(express.static(CLIENT_DIR));
 // Mount các API routes
 app.use('/api/auth', authRoutes);
 app.use('/api/questions', questionsRoutes);
+app.use('/api/quizzes', quizzesRoutes);
+app.use('/api/quiz-results', quizResultsRoutes);
 
 // Health check endpoint
 app.get('/api/health', (req, res) => {
@@ -68,8 +72,10 @@ async function startServer() {
       console.log('========================================================');
       console.log(`🚀 Quiz App Server đang chạy tại: http://localhost:${PORT}`);
       console.log(`📁 Client Web App: http://localhost:${PORT}`);
-      console.log(`📡 API Auth:       http://localhost:${PORT}/api/auth`);
-      console.log(`📡 API Questions:  http://localhost:${PORT}/api/questions`);
+      console.log(`📡 API Auth:         http://localhost:${PORT}/api/auth`);
+      console.log(`📡 API Quizzes:      http://localhost:${PORT}/api/quizzes`);
+      console.log(`📡 API Quiz Results: http://localhost:${PORT}/api/quiz-results`);
+      console.log(`📡 API Questions:    http://localhost:${PORT}/api/questions`);
       console.log('========================================================');
     });
   } catch (error) {

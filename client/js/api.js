@@ -134,5 +134,88 @@ export const api = {
         data: { success: false, message: 'Không thể khôi phục câu hỏi trên máy chủ!' }
       };
     }
+  },
+
+  /**
+   * 1. Gọi API Lấy danh sách tất cả các bài trắc nghiệm (GET /api/quizzes)
+   */
+  async getQuizzes() {
+    try {
+      const response = await fetch(`${API_BASE}/quizzes`);
+      const data = await response.json();
+      return { ok: response.ok, status: response.status, data };
+    } catch (error) {
+      console.warn('[API] Lỗi khi lấy danh sách bài trắc nghiệm:', error);
+      return {
+        ok: false,
+        status: 0,
+        data: { success: false, quizzes: [], message: 'Không thể kết nối đến máy chủ!' }
+      };
+    }
+  },
+
+  /**
+   * 2. Gọi API Lấy danh sách câu hỏi theo từng quiz_id (GET /api/quizzes/:id/questions)
+   * @param {number|string} quizId - ID bài trắc nghiệm
+   */
+  async getQuizQuestions(quizId) {
+    try {
+      const response = await fetch(`${API_BASE}/quizzes/${quizId}/questions`);
+      const data = await response.json();
+      return { ok: response.ok, status: response.status, data };
+    } catch (error) {
+      console.warn(`[API] Lỗi khi lấy câu hỏi bài thi [${quizId}]:`, error);
+      return {
+        ok: false,
+        status: 0,
+        data: { success: false, questions: [], message: 'Không thể nạp câu hỏi bài thi!' }
+      };
+    }
+  },
+
+  /**
+   * 3. Gọi API Lưu kết quả bài làm của người dùng (POST /api/quiz-results)
+   * @param {Object} resultData - { userId, quizId, score, correctAnswers, totalQuestions, timeSpent }
+   */
+  async saveQuizResult(resultData) {
+    try {
+      const response = await fetch(`${API_BASE}/quiz-results`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(resultData)
+      });
+      const data = await response.json();
+      return { ok: response.ok, status: response.status, data };
+    } catch (error) {
+      console.warn('[API] Lỗi khi lưu kết quả bài thi:', error);
+      return {
+        ok: false,
+        status: 0,
+        data: { success: false, message: 'Không thể lưu kết quả bài thi lên máy chủ!' }
+      };
+    }
+  },
+
+  /**
+   * 4. Gọi API Cho phép giảng viên tạo bài trắc nghiệm mới (POST /api/quizzes)
+   * @param {Object} quizData - { title, description, created_by, questions }
+   */
+  async createQuiz(quizData) {
+    try {
+      const response = await fetch(`${API_BASE}/quizzes`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(quizData)
+      });
+      const data = await response.json();
+      return { ok: response.ok, status: response.status, data };
+    } catch (error) {
+      console.warn('[API] Lỗi khi tạo bài trắc nghiệm mới:', error);
+      return {
+        ok: false,
+        status: 0,
+        data: { success: false, message: 'Không thể gửi yêu cầu tạo bài trắc nghiệm!' }
+      };
+    }
   }
 };

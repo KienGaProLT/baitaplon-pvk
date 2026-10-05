@@ -89,11 +89,24 @@ Mở trình duyệt web và truy cập địa chỉ:
 | `POST` | `/api/auth/register` | Đăng ký tài khoản mới | `{ username, password, role }` |
 | `POST` | `/api/auth/login` | Đăng nhập tài khoản | `{ username, password }` |
 
-### 2. Nhóm Quản trị Câu hỏi (`/api/questions`)
+### 2. Nhóm Bài Trắc Nghiệm (`/api/quizzes`)
 | Phương thức | Đường dẫn | Chức năng | Body dữ liệu |
 | :--- | :--- | :--- | :--- |
-| `GET` | `/api/questions` | Lấy toàn bộ danh sách câu hỏi | Không |
-| `POST` | `/api/questions` | Thêm câu hỏi mới vào CSDL | `{ question, options, correct, explanation }` |
+| `GET` | `/api/quizzes` | Lấy danh sách tất cả các bài trắc nghiệm | Không |
+| `GET` | `/api/quizzes/:id/questions` | Lấy danh sách câu hỏi theo từng quiz_id | Không |
+| `POST` | `/api/quizzes` | Giảng viên tạo bài trắc nghiệm mới | `{ title, description, created_by, questions: [...] }` |
+
+### 3. Nhóm Kết Quả Bài Thi (`/api/quiz-results`)
+| Phương thức | Đường dẫn | Chức năng | Body dữ liệu |
+| :--- | :--- | :--- | :--- |
+| `POST` | `/api/quiz-results` | Lưu kết quả bài làm của người dùng | `{ userId, quizId, score, correctAnswers, totalQuestions, timeSpent }` |
+| `GET` | `/api/quiz-results` | Lấy lịch sử kết quả bài thi | Query `?userId=...` (tùy chọn) |
+
+### 4. Nhóm Quản trị Câu hỏi (`/api/questions`)
+| Phương thức | Đường dẫn | Chức năng | Body dữ liệu |
+| :--- | :--- | :--- | :--- |
+| `GET` | `/api/questions` | Lấy danh sách câu hỏi (hỗ trợ lọc `?quiz_id=...`) | Không |
+| `POST` | `/api/questions` | Thêm câu hỏi mới vào CSDL | `{ quiz_id, question, options, correct, explanation }` |
 | `DELETE` | `/api/questions/:id` | Xóa câu hỏi theo ID | Không |
 | `POST` | `/api/questions/reset` | Khôi phục 10 câu hỏi mặc định | Không |
 

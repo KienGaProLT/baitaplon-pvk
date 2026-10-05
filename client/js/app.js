@@ -14,14 +14,18 @@ class App {
     this.dom = this.cacheDom();
     this.showScreen = this.showScreen.bind(this);
 
-    // Khởi tạo Quiz Manager trước
-    this.quiz = new QuizManager(this.dom, this.showScreen);
-
     // Khởi tạo Auth Manager với callbacks
     this.auth = new AuthManager(
       this.dom,
       (user) => this.handleLoginSuccess(user),
       () => this.handleLogout()
+    );
+
+    // Khởi tạo Quiz Manager với callbacks và getter user hiện tại
+    this.quiz = new QuizManager(
+      this.dom,
+      this.showScreen,
+      () => this.auth.getCurrentUser()
     );
 
     this.init();
@@ -45,6 +49,7 @@ class App {
       headerUserAvatar: document.getElementById('header-user-avatar'),
       headerUserName: document.getElementById('header-user-name'),
       headerUserRole: document.getElementById('header-user-role'),
+      btnHeaderHome: document.getElementById('btn-header-home'),
       btnHeaderAdmin: document.getElementById('btn-header-admin'),
       btnLogout: document.getElementById('btn-logout'),
       btnSoundToggle: document.getElementById('btn-sound-toggle'),
@@ -87,18 +92,43 @@ class App {
       regErrorText: document.getElementById('reg-error-text'),
       btnRegisterSubmit: document.getElementById('btn-register-submit'),
 
-      // Start Screen
+      // Start / Home Screen
       welcomeUserText: document.getElementById('welcome-user-text'),
       startTotalQ: document.getElementById('start-total-q'),
       btnStart: document.getElementById('btn-start'),
 
-      // Quiz Screen
+      // Teacher Quiz Creation Form (Dành cho role === 'teacher')
+      teacherQuizCreatePanel: document.getElementById('teacher-quiz-create-panel'),
+      teacherQuizAlert: document.getElementById('teacher-quiz-alert'),
+      teacherQuizAlertText: document.getElementById('teacher-quiz-alert-text'),
+      formCreateQuiz: document.getElementById('form-create-quiz'),
+      newQuizTitle: document.getElementById('new-quiz-title'),
+      newQuizDesc: document.getElementById('new-quiz-desc'),
+      newQText: document.getElementById('new-q-text'),
+      newOptA: document.getElementById('new-opt-a'),
+      newOptB: document.getElementById('new-opt-b'),
+      newOptC: document.getElementById('new-opt-c'),
+      newOptD: document.getElementById('new-opt-d'),
+      newQCorrect: document.getElementById('new-q-correct'),
+      newQExplanation: document.getElementById('new-q-explanation'),
+      btnSubmitCreateQuiz: document.getElementById('btn-submit-create-quiz'),
+
+      // Quizzes List Grid
+      quizzesSection: document.querySelector('.quizzes-section'),
+      quizzesGrid: document.getElementById('quizzes-grid'),
+      quizzesCountBadge: document.getElementById('quizzes-count-badge'),
+      btnRefreshQuizzes: document.getElementById('btn-refresh-quizzes'),
+
+      // Quiz Playing Screen
+      btnExitToQuizzes: document.getElementById('btn-exit-to-quizzes'),
+      activeQuizTitle: document.getElementById('active-quiz-title'),
       progressBar: document.getElementById('progress-bar'),
       currentQIndex: document.getElementById('current-q-index'),
       totalQCount: document.getElementById('total-q-count'),
       liveScore: document.getElementById('live-score'),
       timerBadge: document.getElementById('timer-badge'),
       timerSeconds: document.getElementById('timer-seconds'),
+      questionTag: document.getElementById('question-tag'),
       questionText: document.getElementById('question-text'),
       optionsGrid: document.getElementById('options-grid'),
       explanationBox: document.getElementById('explanation-box'),
@@ -111,6 +141,7 @@ class App {
       trophyBadge: document.getElementById('trophy-badge'),
       resultTitle: document.getElementById('result-title'),
       resultSubtitle: document.getElementById('result-subtitle'),
+      resultSavedBadge: document.getElementById('result-saved-badge'),
       finalScorePercent: document.getElementById('final-score-percent'),
       finalCorrectCount: document.getElementById('final-correct-count'),
       finalTotalCount: document.getElementById('final-total-count'),
@@ -119,6 +150,7 @@ class App {
       statAccuracy: document.getElementById('stat-accuracy'),
       statGrade: document.getElementById('stat-grade'),
       btnRestart: document.getElementById('btn-restart'),
+      btnBackToQuizzes: document.getElementById('btn-back-to-quizzes'),
       btnReview: document.getElementById('btn-review'),
 
       // Review Screen
@@ -153,8 +185,15 @@ class App {
     // 1. Khởi tạo chế độ Sáng / Tối (Light / Dark Mode)
     this.initTheme();
 
-    // 2. Tải danh sách câu hỏi từ CSDL qua API
-    await this.quiz.loadQuestions();
+    // 2. Gắn sự kiện nút Trang chủ / Bài thi trên Header
+    if (this.dom.btnHeaderHome) {
+      this.dom.btnHeaderHome.addEventListener('click', () => {
+        this.quiz.playSound('click');
+        this.quiz.clearIntervalTimer();
+        this.showScreen('start');
+        this.quiz.loadQuizzes();
+      });
+    }
 
     // 3. Gắn sự kiện nút Quản trị trên Header (Giảng viên)
     if (this.dom.btnHeaderAdmin) {
@@ -230,21 +269,37 @@ class App {
   /**
    * Xử lý điều hướng khi đăng nhập thành công
    */
-  handleLoginSuccess(user) {
+  async handleLoginSuccess(user) {
     this.quiz.initAudioContext();
     this.quiz.playSound('correct');
 
-    if (user.role === 'teacher') {
-      // Giảng viên -> Chuyển thẳng vào Bảng Quản trị
-      this.quiz.renderAdminQuestions();
-      this.showScreen('admin');
-    } else {
-      // Sinh viên -> Chuyển tới Màn hình chào mừng làm bài
-      if (this.dom.welcomeUserText) {
-        this.dom.welcomeUserText.textContent = `Xin chào, ${user.username}! Hãy sẵn sàng thử thách kiến thức nhé.`;
-      }
-      this.showScreen('start');
+    // Cập nhật lời chào mừng
+    if (this.dom.welcomeUserText) {
+      const roleText = user.role === 'teacher' ? 'Quý Thầy/Cô' : 'bạn';
+      this.dom.welcomeUserText.textContent = `Xin chào ${roleText} ${user.username}! Hãy khám phá các bài trắc nghiệm dưới đây.`;
     }
+
+    // Phân quyền giao diện theo yêu cầu:
+    // Nếu role === 'teacher', hiển thị form tạo bài trắc nghiệm mới và nút Quản trị
+    if (user.role === 'teacher') {
+      if (this.dom.teacherQuizCreatePanel) {
+        this.dom.teacherQuizCreatePanel.classList.remove('hidden');
+      }
+      if (this.dom.btnHeaderAdmin) {
+        this.dom.btnHeaderAdmin.classList.remove('hidden');
+      }
+    } else {
+      if (this.dom.teacherQuizCreatePanel) {
+        this.dom.teacherQuizCreatePanel.classList.add('hidden');
+      }
+      if (this.dom.btnHeaderAdmin) {
+        this.dom.btnHeaderAdmin.classList.add('hidden');
+      }
+    }
+
+    // Chuyển tới Trang chủ và nạp danh sách các bài trắc nghiệm
+    this.showScreen('start');
+    await this.quiz.loadQuizzes();
   }
 
   /**

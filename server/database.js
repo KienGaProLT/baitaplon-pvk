@@ -3,7 +3,8 @@
  * Database Module (Microsoft SQL Server) - server/database.js
  * Quản lý kết nối CSDL SQL Server sử dụng thư viện `mssql` dựa trên các
  * biến môi trường trong file `.env`.
- * Tự động khởi tạo cấu trúc bảng (`users`, `questions`) và nạp dữ liệu mẫu ban đầu.
+ * Tự động khởi tạo cấu trúc bảng (`users`, `quizzes`, `questions`, `quiz_results`)
+ * và nạp dữ liệu mẫu ban đầu.
  * ==========================================================================
  */
 
@@ -11,12 +12,13 @@ const sql = require('mssql');
 const path = require('path');
 const fs = require('fs');
 
-// Nạp biến môi trường từ file server/.env
+// Nạp biến môi trường từ file server/.env (hoặc fallback ở root)
 require('dotenv').config({ path: path.join(__dirname, '.env') });
+require('dotenv').config();
 
 const QUESTIONS_JSON_PATH = path.join(__dirname, '../questions.json');
 
-// Cấu hình kết nối SQL Server từ các biến môi trường trong file .env
+// Cấu hình kết nối SQL Server từ các biến môi trường
 const dbConfig = {
   user: process.env.DB_USER || 'sa',
   password: process.env.DB_PASSWORD || '123456',
@@ -140,20 +142,29 @@ async function getPool() {
  * để tương thích với mssql Request input parameters
  */
 function prepareSqlAndInputs(request, sqlString, params = []) {
+  const paramList = Array.isArray(params)
+    ? params
+    : (params !== undefined && params !== null ? [params] : []);
+
+  if (paramList.length === 0) {
+    return sqlString;
+  }
+
   let paramIndex = 0;
   const transformedSql = sqlString.replace(/\?/g, () => {
     const paramName = `p${paramIndex}`;
-    const value = params[paramIndex];
-    request.input(paramName, value);
+    const value = paramList[paramIndex];
+    request.input(paramName, value !== undefined ? value : null);
     paramIndex++;
     return `@${paramName}`;
   });
+
   return transformedSql;
 }
 
 /**
  * Thực thi truy vấn SELECT nhiều dòng dữ liệu (Array of rows)
- * @param {string} sqlString - Câu lệnh SQL (hỗ trợ cả @p hoặc ?)
+ * @param {string} sqlString - Câu lệnh SQL (hỗ trợ cả @param hoặc ?)
  * @param {Array} params - Mảng tham số truyền vào
  */
 async function dbAll(sqlString, params = []) {
@@ -183,12 +194,13 @@ async function dbRun(sqlString, params = []) {
   const pool = await getPool();
   const request = pool.request();
 
-  // Kiểm tra nếu là INSERT mà chưa có SCOPE_IDENTITY, tự động lấy ID vừa tạo
   let query = prepareSqlAndInputs(request, sqlString, params);
-  const isInsert = /^\s*INSERT\s+INTO/i.test(query);
+  const trimmed = query.trim().replace(/;+$/, '');
+  const isInsert = /^\s*INSERT\s+INTO/i.test(trimmed);
 
-  if (isInsert && !/SELECT\s+SCOPE_IDENTITY\(\)/i.test(query)) {
-    query += '; SELECT SCOPE_IDENTITY() AS lastID;';
+  // Nếu là INSERT mà chưa có SCOPE_IDENTITY hoặc OUTPUT, bổ sung để lấy ID vừa tạo
+  if (isInsert && !/SELECT\s+SCOPE_IDENTITY\(\)/i.test(trimmed) && !/OUTPUT\s+INSERTED\./i.test(trimmed)) {
+    query = `${trimmed}; SELECT SCOPE_IDENTITY() AS lastID;`;
   }
 
   const result = await request.query(query);
@@ -199,7 +211,7 @@ async function dbRun(sqlString, params = []) {
 }
 
 /**
- * Khởi tạo cấu trúc các bảng và seed dữ liệu mẫu
+ * Khởi tạo cấu trúc các bảng (users, quizzes, questions, quiz_results) và seed dữ liệu mẫu
  */
 async function initDatabase() {
   const pool = await getPool();
@@ -219,12 +231,41 @@ async function initDatabase() {
     END
   `);
 
-  // 2. Tạo bảng questions nếu chưa tồn tại
+  // 2. Tạo bảng quizzes nếu chưa tồn tại (và thêm cột nếu bảng đã có sẵn mà thiếu)
+  await pool.request().query(`
+    IF NOT EXISTS (SELECT * FROM sys.tables WHERE name = 'quizzes')
+    BEGIN
+      CREATE TABLE quizzes (
+        id INT IDENTITY(1,1) PRIMARY KEY,
+        title NVARCHAR(255) NOT NULL,
+        description NVARCHAR(MAX),
+        created_by INT NULL,
+        created_at DATETIME DEFAULT GETDATE()
+      );
+      PRINT '[SQL Server] Đã khởi tạo bảng [quizzes].';
+    END
+    ELSE
+    BEGIN
+      IF NOT EXISTS (SELECT * FROM sys.columns WHERE object_id = OBJECT_ID('quizzes') AND name = 'created_at')
+      BEGIN
+        ALTER TABLE quizzes ADD created_at DATETIME DEFAULT GETDATE();
+        PRINT '[SQL Server] Đã thêm cột [created_at] vào bảng [quizzes].';
+      END
+      IF NOT EXISTS (SELECT * FROM sys.columns WHERE object_id = OBJECT_ID('quizzes') AND name = 'created_by')
+      BEGIN
+        ALTER TABLE quizzes ADD created_by INT NULL;
+        PRINT '[SQL Server] Đã thêm cột [created_by] vào bảng [quizzes].';
+      END
+    END
+  `);
+
+  // 3. Tạo bảng questions nếu chưa tồn tại (và bổ sung cột quiz_id nếu chưa có)
   await pool.request().query(`
     IF NOT EXISTS (SELECT * FROM sys.tables WHERE name = 'questions')
     BEGIN
       CREATE TABLE questions (
         id INT IDENTITY(1,1) PRIMARY KEY,
+        quiz_id INT NULL,
         question NVARCHAR(MAX) NOT NULL,
         options NVARCHAR(MAX) NOT NULL,
         correct INT NOT NULL,
@@ -233,9 +274,53 @@ async function initDatabase() {
       );
       PRINT '[SQL Server] Đã khởi tạo bảng [questions].';
     END
+    ELSE
+    BEGIN
+      IF NOT EXISTS (SELECT * FROM sys.columns WHERE object_id = OBJECT_ID('questions') AND name = 'quiz_id')
+      BEGIN
+        ALTER TABLE questions ADD quiz_id INT NULL;
+        PRINT '[SQL Server] Đã thêm cột [quiz_id] vào bảng [questions].';
+      END
+    END
   `);
 
-  // 3. Seed tài khoản mặc định
+  // 4. Tạo bảng quiz_results nếu chưa tồn tại (và bổ sung các cột mở rộng nếu thiếu)
+  await pool.request().query(`
+    IF NOT EXISTS (SELECT * FROM sys.tables WHERE name = 'quiz_results')
+    BEGIN
+      CREATE TABLE quiz_results (
+        id INT IDENTITY(1,1) PRIMARY KEY,
+        user_id INT NULL,
+        quiz_id INT NULL,
+        score FLOAT NULL,
+        total_questions INT NULL,
+        correct_answers INT NULL,
+        time_spent INT NULL,
+        created_at DATETIME DEFAULT GETDATE()
+      );
+      PRINT '[SQL Server] Đã khởi tạo bảng [quiz_results].';
+    END
+    ELSE
+    BEGIN
+      IF NOT EXISTS (SELECT * FROM sys.columns WHERE object_id = OBJECT_ID('quiz_results') AND name = 'correct_answers')
+      BEGIN
+        ALTER TABLE quiz_results ADD correct_answers INT NULL;
+        PRINT '[SQL Server] Đã thêm cột [correct_answers] vào bảng [quiz_results].';
+      END
+      IF NOT EXISTS (SELECT * FROM sys.columns WHERE object_id = OBJECT_ID('quiz_results') AND name = 'time_spent')
+      BEGIN
+        ALTER TABLE quiz_results ADD time_spent INT NULL;
+        PRINT '[SQL Server] Đã thêm cột [time_spent] vào bảng [quiz_results].';
+      END
+      IF NOT EXISTS (SELECT * FROM sys.columns WHERE object_id = OBJECT_ID('quiz_results') AND name = 'created_at')
+      BEGIN
+        ALTER TABLE quiz_results ADD created_at DATETIME DEFAULT GETDATE();
+        PRINT '[SQL Server] Đã thêm cột [created_at] vào bảng [quiz_results].';
+      END
+    END
+  `);
+
+  // 5. Seed tài khoản mặc định
   for (const user of DEFAULT_USERS) {
     const existing = await dbGet(`SELECT id FROM users WHERE LOWER(username) = LOWER(?)`, [user.username]);
     if (!existing) {
@@ -247,7 +332,47 @@ async function initDatabase() {
     }
   }
 
-  // 4. Seed câu hỏi mặc định nếu bảng questions chưa có câu hỏi nào
+  // 6. Seed bài trắc nghiệm mẫu (Default Quizzes) nếu bảng quizzes chưa có bài thi nào
+  const quizCountRow = await dbGet(`SELECT COUNT(*) as count FROM quizzes`);
+  const quizCount = quizCountRow ? quizCountRow.count : 0;
+
+  let defaultQuizId = null;
+
+  if (quizCount === 0) {
+    const teacherUser = await dbGet(`SELECT id FROM users WHERE role = 'teacher'`);
+    const teacherId = teacherUser ? teacherUser.id : null;
+
+    // Bài 1: JavaScript Cơ Bản
+    await dbRun(
+      `INSERT INTO quizzes (title, description, created_by) VALUES (?, ?, ?)`,
+      [
+        'Bài 1: JavaScript Cơ Bản & ES6+',
+        'Kiểm tra kiến thức nền tảng: Biến, Scope, Closure, Hoisting, Toán tử và DOM.',
+        teacherId
+      ]
+    );
+
+    // Lấy ID chính xác từ database
+    const topQuiz = await dbGet(`SELECT TOP 1 id FROM quizzes ORDER BY id ASC`);
+    defaultQuizId = topQuiz ? topQuiz.id : 1;
+
+    // Bài 2: JavaScript Nâng Cao
+    await dbRun(
+      `INSERT INTO quizzes (title, description, created_by) VALUES (?, ?, ?)`,
+      [
+        'Bài 2: JavaScript Nâng Cao & Bất Đồng Bộ',
+        'Chuyên đề chuyên sâu về Event Loop, Microtask Queue, Promise, Async/Await và Web APIs.',
+        teacherId
+      ]
+    );
+
+    console.log(`[Seed] Đã tạo thành công các bài trắc nghiệm mẫu vào CSDL SQL Server (Quiz ID: ${defaultQuizId})!`);
+  } else {
+    const topQuiz = await dbGet(`SELECT TOP 1 id FROM quizzes ORDER BY id ASC`);
+    defaultQuizId = topQuiz ? topQuiz.id : 1;
+  }
+
+  // 7. Seed câu hỏi mặc định nếu bảng questions chưa có câu hỏi nào
   const countRow = await dbGet(`SELECT COUNT(*) as count FROM questions`);
   const count = countRow ? countRow.count : 0;
 
@@ -269,11 +394,62 @@ async function initDatabase() {
     for (const q of questionsToSeed) {
       const optionsJson = JSON.stringify(q.options || []);
       await dbRun(
-        `INSERT INTO questions (question, options, correct, explanation) VALUES (?, ?, ?, ?)`,
-        [q.question, optionsJson, q.correct, q.explanation]
+        `INSERT INTO questions (quiz_id, question, options, correct, explanation) VALUES (?, ?, ?, ?, ?)`,
+        [defaultQuizId, q.question, optionsJson, q.correct, q.explanation]
       );
     }
-    console.log(`[Seed] Đã nạp thành công ${questionsToSeed.length} câu hỏi ban đầu vào SQL Server!`);
+    console.log(`[Seed] Đã nạp thành công ${questionsToSeed.length} câu hỏi ban đầu liên kết với Quiz ID ${defaultQuizId}!`);
+  }
+
+  // 8. Đảm bảo toàn bộ câu hỏi chưa có quiz_id được gắn vào defaultQuizId
+  if (defaultQuizId) {
+    const unassignedCount = await dbGet(`SELECT COUNT(*) as count FROM questions WHERE quiz_id IS NULL OR quiz_id = 0`);
+    if (unassignedCount && unassignedCount.count > 0) {
+      await pool.request().query(`UPDATE questions SET quiz_id = ${defaultQuizId} WHERE quiz_id IS NULL OR quiz_id = 0`);
+      console.log(`[Seed] Đã cập nhật ${unassignedCount.count} câu hỏi cũ liên kết sang Quiz ID ${defaultQuizId}!`);
+    }
+  }
+
+  // 9. Bổ sung câu hỏi mẫu cho Bài thi số 2 nếu Bài 2 chưa có câu hỏi
+  const secondQuiz = await dbGet(`SELECT TOP 1 id FROM quizzes WHERE id > 1 ORDER BY id ASC`);
+  if (secondQuiz) {
+    const q2CountRow = await dbGet(`SELECT COUNT(*) as count FROM questions WHERE quiz_id = ?`, [secondQuiz.id]);
+    if (q2CountRow && q2CountRow.count === 0) {
+      const asyncQuestions = [
+        {
+          question: "Thứ tự thực thi nào là đúng giữa Macro-task (setTimeout) và Micro-task (Promise)?",
+          options: ["Macro-task chạy trước Micro-task", "Tất cả Micro-task trong hàng đợi được xử lý trước Macro-task tiếp theo", "Cả hai chạy cùng lúc song song", "Chạy ngẫu nhiên tùy thuộc vào trình duyệt"],
+          correct: 1,
+          explanation: "Event Loop luôn ưu tiên xử lý toàn bộ các công việc trong Microtask Queue (Promise.then, queueMicrotask) trước khi chuyển sang Macrotask tiếp theo (setTimeout, setInterval)."
+        },
+        {
+          question: "Một hàm được khai báo với từ khóa `async` luôn trả về kiểu dữ liệu gì?",
+          options: ["Object thông thường", "Promise", "Callback function", "undefined"],
+          correct: 1,
+          explanation: "Mọi hàm async luôn tự động bọc giá trị trả về trong một Promise. Nếu hàm ném ra lỗi, nó sẽ trả về một Promise bị rejected."
+        },
+        {
+          question: "Phương thức nào của Promise sẽ chờ tất cả các Promise hoàn thành bất kể thành công hay thất bại?",
+          options: ["Promise.all()", "Promise.race()", "Promise.any()", "Promise.allSettled()"],
+          correct: 3,
+          explanation: "Promise.allSettled() chờ cho tới khi toàn bộ mảng Promise đã kết thúc (dù resolve hay reject) và trả về mảng kết quả chi tiết từng promise."
+        },
+        {
+          question: "Toán tử Optional Chaining (?.) trong JavaScript có tác dụng gì?",
+          options: ["Truy cập thuộc tính an toàn mà không gây lỗi nếu object là null hoặc undefined", "Gán giá trị mặc định cho biến", "So sánh tuyệt đối kiểu dữ liệu", "Tạo một hàm callback ẩn danh"],
+          correct: 0,
+          explanation: "Toán tử ?. cho phép đọc giá trị của thuộc tính nằm sâu trong chuỗi object mà không cần kiểm tra từng mắt xích có null/undefined hay không."
+        }
+      ];
+
+      for (const item of asyncQuestions) {
+        await dbRun(
+          `INSERT INTO questions (quiz_id, question, options, correct, explanation) VALUES (?, ?, ?, ?, ?)`,
+          [secondQuiz.id, item.question, JSON.stringify(item.options), item.correct, item.explanation]
+        );
+      }
+      console.log(`[Seed] Đã nạp thêm các câu hỏi mẫu cho Bài thi ID ${secondQuiz.id}!`);
+    }
   }
 }
 
@@ -283,6 +459,9 @@ async function initDatabase() {
 async function resetDefaultQuestions() {
   const pool = await getPool();
   await pool.request().query(`DELETE FROM questions; DBCC CHECKIDENT ('questions', RESEED, 0);`);
+
+  const topQuiz = await dbGet(`SELECT TOP 1 id FROM quizzes ORDER BY id ASC`);
+  const targetQuizId = topQuiz ? topQuiz.id : 1;
 
   let questionsToSeed = FALLBACK_QUESTIONS;
   if (fs.existsSync(QUESTIONS_JSON_PATH)) {
@@ -300,8 +479,8 @@ async function resetDefaultQuestions() {
   for (const q of questionsToSeed) {
     const optionsJson = JSON.stringify(q.options || []);
     await dbRun(
-      `INSERT INTO questions (question, options, correct, explanation) VALUES (?, ?, ?, ?)`,
-      [q.question, optionsJson, q.correct, q.explanation]
+      `INSERT INTO questions (quiz_id, question, options, correct, explanation) VALUES (?, ?, ?, ?, ?)`,
+      [targetQuizId, q.question, optionsJson, q.correct, q.explanation]
     );
   }
 
@@ -310,11 +489,11 @@ async function resetDefaultQuestions() {
 
 module.exports = {
   sql,
-  getPool,
   dbConfig,
-  initDatabase,
+  getPool,
   dbAll,
   dbGet,
   dbRun,
+  initDatabase,
   resetDefaultQuestions
 };

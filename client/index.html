@@ -60,6 +60,13 @@
               <span class="role-badge" id="header-user-role">Sinh viên</span>
             </div>
           </div>
+          <button id="btn-header-home" class="btn btn-secondary btn-small" title="Danh sách các bài trắc nghiệm">
+            <svg class="svg-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+              <path d="M3 9l9-7 9 7v11a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2z"></path>
+              <polyline points="9 22 9 12 15 12 15 22"></polyline>
+            </svg>
+            <span>Bài Thi</span>
+          </button>
           <button id="btn-header-admin" class="btn btn-secondary btn-small hidden" title="Mở bảng quản trị giảng viên">
             <svg class="svg-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
               <path d="M12 20h9"></path>
@@ -391,7 +398,7 @@
         </div>
       </section>
 
-      <!-- SCREEN 1: START SCREEN (FOR STUDENTS / QUIZ INTRO) -->
+      <!-- SCREEN 1: START / HOME SCREEN (QUIZZES LIST & TEACHER CREATION FORM) -->
       <section id="screen-start" class="screen">
         <div class="start-hero">
           <div class="hero-badge">
@@ -399,74 +406,145 @@
               <path d="M12 2l3.09 6.26L22 9.27l-5 4.87 1.18 6.88L12 17.77l-6.18 3.25L7 14.14 2 9.27l6.91-1.01L12 2z">
               </path>
             </svg>
-            <span>Frontend Challenge 2026</span>
+            <span>Hệ Thống Đánh Giá Năng Lực Trực Tuyến</span>
           </div>
-          <h2 class="hero-title">Thử Thách Kiến Thức <span class="gradient-text">JavaScript</span></h2>
-          <p class="welcome-user-text" id="welcome-user-text">Chào mừng bạn đến với kỳ thi trắc nghiệm!</p>
+          <h2 class="hero-title">Khảo Sát Kiến Thức <span class="gradient-text">Trắc Nghiệm</span></h2>
+          <p class="welcome-user-text" id="welcome-user-text">Chào mừng bạn đến với hệ thống kiểm tra trắc nghiệm!</p>
           <p class="hero-desc">
-            Kiểm tra mức độ thành thạo JavaScript từ cơ bản đến nâng cao: Scope, Closure, Prototype, ES6+, Asynchronous
-            và DOM.
+            Lựa chọn bài thi trắc nghiệm phù hợp để thử thách khả năng, tích lũy kinh nghiệm và rèn luyện phản xạ nhanh.
           </p>
+        </div>
 
-          <div class="features-grid">
-            <div class="feature-item">
-              <div class="feature-icon">
-                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-                  <circle cx="12" cy="12" r="10"></circle>
-                  <path d="M9.09 9a3 3 0 0 1 5.83 1c0 2-3 3-3 3"></path>
-                  <line x1="12" y1="17" x2="12.01" y2="17"></line>
-                </svg>
+        <!-- TEACHER ONLY: Form Tạo Bài Trắc Nghiệm Mới -->
+        <div id="teacher-quiz-create-panel" class="teacher-quiz-create-panel hidden">
+          <div class="panel-header">
+            <div class="panel-badge-wrap">
+              <span class="panel-badge">👨‍🏫 Giảng Viên</span>
+              <h3>➕ Tạo Bài Trắc Nghiệm Mới</h3>
+            </div>
+            <p class="panel-desc">Tạo bài trắc nghiệm mới và lưu trực tiếp vào Microsoft SQL Server.</p>
+          </div>
+
+          <div id="teacher-quiz-alert" class="admin-alert hidden">
+            <span id="teacher-quiz-alert-text">Đã tạo bài trắc nghiệm thành công!</span>
+          </div>
+
+          <form id="form-create-quiz" class="teacher-create-quiz-form">
+            <div class="form-group">
+              <label for="new-quiz-title" class="form-label">Tiêu đề bài trắc nghiệm: *</label>
+              <input type="text" id="new-quiz-title" class="form-input" placeholder="Ví dụ: Lập trình Bất Đồng Bộ & Promise trong JavaScript..." required />
+            </div>
+
+            <div class="form-group">
+              <label for="new-quiz-desc" class="form-label">Mô tả bài trắc nghiệm:</label>
+              <textarea id="new-quiz-desc" class="form-textarea" rows="2" placeholder="Tóm tắt nội dung kiến thức, độ khó và mục tiêu..."></textarea>
+            </div>
+
+            <!-- Optional Initial Question Section -->
+            <div class="create-first-question-box">
+              <div class="first-q-header">
+                <h4>📝 Thêm Câu Hỏi Đầu Tiên (Tùy chọn)</h4>
+                <span class="first-q-tip">Có thể bổ sung thêm câu hỏi sau</span>
               </div>
-              <div class="feature-info">
-                <h4><span id="start-total-q">10</span> Câu Hỏi</h4>
-                <p>Nội dung chất lượng cao</p>
+
+              <div class="form-group">
+                <label for="new-q-text" class="form-label">Nội dung câu hỏi:</label>
+                <input type="text" id="new-q-text" class="form-input" placeholder="Nhập câu hỏi trắc nghiệm..." />
+              </div>
+
+              <div class="options-input-grid">
+                <div class="form-group">
+                  <label for="new-opt-a" class="form-label">Đáp án A:</label>
+                  <input type="text" id="new-opt-a" class="form-input" placeholder="Lựa chọn A..." />
+                </div>
+                <div class="form-group">
+                  <label for="new-opt-b" class="form-label">Đáp án B:</label>
+                  <input type="text" id="new-opt-b" class="form-input" placeholder="Lựa chọn B..." />
+                </div>
+                <div class="form-group">
+                  <label for="new-opt-c" class="form-label">Đáp án C:</label>
+                  <input type="text" id="new-opt-c" class="form-input" placeholder="Lựa chọn C..." />
+                </div>
+                <div class="form-group">
+                  <label for="new-opt-d" class="form-label">Đáp án D:</label>
+                  <input type="text" id="new-opt-d" class="form-input" placeholder="Lựa chọn D..." />
+                </div>
+              </div>
+
+              <div class="form-row-dual">
+                <div class="form-group flex-1">
+                  <label for="new-q-correct" class="form-label">Đáp án đúng:</label>
+                  <select id="new-q-correct" class="form-select">
+                    <option value="0">Đáp án A</option>
+                    <option value="1">Đáp án B</option>
+                    <option value="2">Đáp án C</option>
+                    <option value="3">Đáp án D</option>
+                  </select>
+                </div>
+                <div class="form-group flex-2">
+                  <label for="new-q-explanation" class="form-label">Giải thích chi tiết:</label>
+                  <input type="text" id="new-q-explanation" class="form-input" placeholder="Giải thích lý do vì sao đáp án này đúng..." />
+                </div>
               </div>
             </div>
 
-            <div class="feature-item">
-              <div class="feature-icon">
-                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-                  <circle cx="12" cy="12" r="10"></circle>
-                  <polyline points="12 6 12 12 16 14"></polyline>
-                </svg>
-              </div>
-              <div class="feature-info">
-                <h4>20 Giây / Câu</h4>
-                <p>Thử thách phản xạ nhanh</p>
-              </div>
-            </div>
+            <button type="submit" id="btn-submit-create-quiz" class="btn btn-primary btn-full">
+              <svg class="svg-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                <line x1="12" y1="5" x2="12" y2="19"></line>
+                <line x1="5" y1="12" x2="19" y2="12"></line>
+              </svg>
+              <span>Xuất Bản Bài Trắc Nghiệm Mới</span>
+            </button>
+          </form>
+        </div>
 
-            <div class="feature-item">
-              <div class="feature-icon">
-                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-                  <path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"></path>
-                  <polyline points="14 2 14 8 20 8"></polyline>
-                  <line x1="16" y1="13" x2="8" y2="13"></line>
-                  <line x1="16" y1="17" x2="8" y2="17"></line>
+        <!-- QUIZZES LIST: Trang chủ tải và hiển thị danh sách các bài trắc nghiệm -->
+        <div class="quizzes-section">
+          <div class="quizzes-header-bar">
+            <div>
+              <h3 class="quizzes-title">📚 Danh Sách Các Bài Trắc Nghiệm</h3>
+              <p class="quizzes-subtitle">Chọn một bài thi bên dưới để bắt đầu làm bài</p>
+            </div>
+            <div class="quizzes-actions">
+              <span class="quizzes-count-badge" id="quizzes-count-badge">Đang tải bài thi...</span>
+              <button type="button" id="btn-refresh-quizzes" class="btn btn-secondary btn-small" title="Làm mới danh sách">
+                <svg class="svg-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                  <polyline points="23 4 23 10 17 10"></polyline>
+                  <polyline points="1 20 1 14 7 14"></polyline>
+                  <path d="M3.51 9a9 9 0 0 1 14.85-3.36L23 10M1 14l4.64 4.36A9 9 0 0 0 20.49 15"></path>
                 </svg>
-              </div>
-              <div class="feature-info">
-                <h4>Giải Thích Chi Tiết</h4>
-                <p>Học ngay sau mỗi câu</p>
-              </div>
+                <span>Tải Lại</span>
+              </button>
             </div>
           </div>
 
-          <div class="start-action">
-            <button id="btn-start" class="btn btn-primary btn-large">
-              <span>Bắt Đầu Làm Bài</span>
-              <svg class="svg-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-                <line x1="5" y1="12" x2="19" y2="12"></line>
-                <polyline points="12 5 19 12 12 19"></polyline>
-              </svg>
-            </button>
-            <p class="hint-text">Mẹo: Có thể dùng bàn phím các số 1, 2, 3, 4 để chọn đáp án</p>
+          <!-- Grid chứa danh sách bài trắc nghiệm nạp động từ CSDL -->
+          <div id="quizzes-grid" class="quizzes-grid">
+            <div class="quizzes-loading-state">
+              <span class="loading-spinner"></span>
+              <p>Đang tải danh sách bài trắc nghiệm từ máy chủ...</p>
+            </div>
           </div>
         </div>
       </section>
 
       <!-- SCREEN 2: QUIZ PLAY SCREEN -->
       <section id="screen-quiz" class="screen">
+        <!-- Header thông tin bài thi hiện tại -->
+        <div class="quiz-current-header">
+          <button type="button" id="btn-exit-to-quizzes" class="btn btn-secondary btn-small" title="Trở về danh sách bài thi">
+            <svg class="svg-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+              <line x1="19" y1="12" x2="5" y2="12"></line>
+              <polyline points="12 19 5 12 12 5"></polyline>
+            </svg>
+            <span>Danh Sách Bài Thi</span>
+          </button>
+          <div class="quiz-active-info">
+            <span class="quiz-active-badge">Đang thi</span>
+            <h3 id="active-quiz-title" class="active-quiz-title">Bài Thi Trắc Nghiệm</h3>
+          </div>
+        </div>
+
         <!-- Progress bar -->
         <div class="quiz-progress-wrapper">
           <div class="progress-bar-bg">
@@ -497,7 +575,7 @@
 
         <!-- Question content -->
         <div class="question-container">
-          <div class="question-tag" id="question-tag">JavaScript Core</div>
+          <div class="question-tag" id="question-tag">Câu hỏi trắc nghiệm</div>
           <h3 class="question-text" id="question-text">Đang tải câu hỏi...</h3>
         </div>
 
@@ -541,6 +619,16 @@
           <h2 class="result-title" id="result-title">Hoàn Thành Bài Thi!</h2>
           <p class="result-subtitle" id="result-subtitle">Dưới đây là kết quả đánh giá kỹ năng của bạn</p>
 
+          <!-- Status badge đã lưu kết quả vào CSDL -->
+          <div id="result-saved-badge" class="result-saved-badge">
+            <svg class="svg-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+              <path d="M19 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h11l5 5v11a2 2 0 0 1-2 2z"></path>
+              <polyline points="17 21 17 13 7 13 7 21"></polyline>
+              <polyline points="7 3 7 8 15 8"></polyline>
+            </svg>
+            <span>Kết quả bài làm đã được lưu thành công vào CSDL SQL Server!</span>
+          </div>
+
           <!-- Circular Score Display -->
           <div class="score-circle-wrapper">
             <svg class="score-circle-svg" viewBox="0 0 120 120">
@@ -572,19 +660,26 @@
 
           <!-- Actions -->
           <div class="result-actions">
-            <button id="btn-review" class="btn btn-secondary">
+            <button id="btn-restart" class="btn btn-primary" title="Làm lại bài thi này">
+              <svg class="svg-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                <polyline points="1 4 1 10 7 10"></polyline>
+                <path d="M3.51 15a9 9 0 1 0 2.13-9.36L1 10"></path>
+              </svg>
+              <span>Làm Lại (Retake)</span>
+            </button>
+            <button id="btn-back-to-quizzes" class="btn btn-secondary" title="Quay về danh sách các bài thi">
+              <svg class="svg-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                <path d="M3 9l9-7 9 7v11a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2z"></path>
+                <polyline points="9 22 9 12 15 12 15 22"></polyline>
+              </svg>
+              <span>Danh Sách Bài Thi</span>
+            </button>
+            <button id="btn-review" class="btn btn-secondary" title="Xem lại các câu hỏi và đáp án đúng">
               <svg class="svg-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
                 <path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z"></path>
                 <circle cx="12" cy="12" r="3"></circle>
               </svg>
               <span>Xem Lại Đáp Án</span>
-            </button>
-            <button id="btn-restart" class="btn btn-primary">
-              <svg class="svg-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-                <polyline points="1 4 1 10 7 10"></polyline>
-                <path d="M3.51 15a9 9 0 1 0 2.13-9.36L1 10"></path>
-              </svg>
-              <span>Làm Lại Bài Thi</span>
             </button>
           </div>
         </div>
