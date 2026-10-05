@@ -719,6 +719,13 @@
               <p class="admin-subtitle">Thêm mới, kiểm tra và quản lý ngân hàng đề thi trắc nghiệm.</p>
             </div>
             <div class="admin-header-actions">
+              <button id="btn-admin-to-home" class="btn btn-secondary btn-small" title="Quay lại danh sách bài trắc nghiệm">
+                <svg class="svg-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                  <path d="M3 9l9-7 9 7v11a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2z"></path>
+                  <polyline points="9 22 9 12 15 12 15 22"></polyline>
+                </svg>
+                <span>Danh Sách Bài Thi</span>
+              </button>
               <button id="btn-admin-to-quiz" class="btn btn-primary btn-small">
                 <svg class="svg-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
                   <polygon points="5 3 19 12 5 21 5 3"></polygon>
@@ -742,6 +749,13 @@
               </div>
 
               <form id="form-add-question" class="admin-form">
+                <div class="form-group">
+                  <label for="admin-quiz-select" class="form-label">Chọn bài trắc nghiệm: *</label>
+                  <select id="admin-quiz-select" class="form-select" required>
+                    <option value="">-- Đang nạp danh sách bài thi --</option>
+                  </select>
+                </div>
+
                 <div class="form-group">
                   <label for="admin-q-text" class="form-label">Nội dung câu hỏi: *</label>
                   <textarea id="admin-q-text" class="form-textarea" rows="3"
@@ -792,7 +806,10 @@
             <!-- Danh Sách Câu Hỏi Hiện Có -->
             <div class="admin-card-panel">
               <div class="panel-header">
-                <h3>📚 Ngân Hàng Câu Hỏi (<span id="admin-q-count">10</span> câu)</h3>
+                <div>
+                  <h3>📚 Ngân Hàng Câu Hỏi (<span id="admin-q-count">0</span> câu)</h3>
+                  <p class="panel-subtitle" id="admin-quiz-filter-label" style="font-size: 0.82rem; color: var(--text-sub); margin-top: 2px;">Theo bài thi đã chọn</p>
+                </div>
                 <button type="button" id="btn-reset-questions" class="btn-text-action"
                   title="Khôi phục lại danh sách câu hỏi gốc từ JSON">
                   🔄 Khôi phục mặc định

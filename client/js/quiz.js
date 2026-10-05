@@ -105,6 +105,7 @@ export class QuizManager {
     this.quizzes = [];
     this.currentQuiz = null;
     this.questions = [];
+    this.adminQuestions = [];
     this.currentIndex = 0;
     this.score = 0;
     this.timeLeft = this.TIME_PER_QUESTION;
@@ -189,12 +190,17 @@ export class QuizManager {
           <span class="quiz-meta-item">⏱️ 20 giây / câu</span>
           <span class="quiz-meta-item">👨‍🏫 ${this.escapeHtml(creatorName)}</span>
         </div>
-        <button type="button" class="btn btn-primary btn-select-quiz" data-id="${quiz.id}">
-          <span>Bắt Đầu Làm Bài</span>
-          <svg class="svg-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-            <polyline points="9 18 15 12 9 6"></polyline>
-          </svg>
-        </button>
+        <div class="quiz-card-actions">
+          <button type="button" class="btn btn-primary btn-select-quiz" data-id="${quiz.id}">
+            <span>Bắt Đầu Làm Bài</span>
+            <svg class="svg-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+              <polyline points="9 18 15 12 9 6"></polyline>
+            </svg>
+          </button>
+          <button type="button" class="btn-add-q-to-quiz" data-id="${quiz.id}" title="Thêm câu hỏi vào bài thi này">
+            <span>➕ Thêm Câu Hỏi</span>
+          </button>
+        </div>
       `;
 
       const btnSelect = card.querySelector('.btn-select-quiz');
@@ -203,6 +209,16 @@ export class QuizManager {
         this.playSound('click');
         this.selectAndStartQuiz(quiz);
       });
+
+      const btnAddQ = card.querySelector('.btn-add-q-to-quiz');
+      if (btnAddQ) {
+        btnAddQ.addEventListener('click', (e) => {
+          e.stopPropagation();
+          this.initAudioContext();
+          this.playSound('click');
+          this.openAdminScreen(quiz.id);
+        });
+      }
 
       this.dom.quizzesGrid.appendChild(card);
     });
@@ -392,6 +408,17 @@ export class QuizManager {
       this.dom.formAddQuestion.addEventListener('submit', (e) => {
         e.preventDefault();
         this.handleAddQuestion();
+      });
+    }
+
+    // Chọn bài thi để quản lý/thêm câu hỏi trong Admin
+    if (this.dom.adminQuizSelect) {
+      this.dom.adminQuizSelect.addEventListener('change', () => {
+        this.playSound('click');
+        const selectedQuizId = parseInt(this.dom.adminQuizSelect.value, 10);
+        if (selectedQuizId) {
+          this.loadAdminQuestions(selectedQuizId);
+        }
       });
     }
 
@@ -843,14 +870,137 @@ export class QuizManager {
    */
 
   /**
+   * Mở giao diện Admin và chọn bài trắc nghiệm mục tiêu
+   * @param {number|string|null} targetQuizId - ID bài trắc nghiệm muốn thêm câu hỏi (tùy chọn)
+   */
+  async openAdminScreen(targetQuizId = null) {
+    if (this.showScreen) {
+      this.showScreen('admin');
+    }
+
+    // Đảm bảo danh sách bài thi đã được nạp
+    if (!this.quizzes || this.quizzes.length === 0) {
+      await this.loadQuizzes();
+    }
+
+    // Nạp danh sách bài thi vào dropdown chọn bài thi
+    if (this.dom.adminQuizSelect) {
+      this.dom.adminQuizSelect.innerHTML = '';
+      if (this.quizzes.length === 0) {
+        this.dom.adminQuizSelect.innerHTML = '<option value="">-- Chưa có bài thi nào --</option>';
+      } else {
+        this.quizzes.forEach(q => {
+          const opt = document.createElement('option');
+          opt.value = q.id;
+          const countInfo = q.question_count !== undefined ? ` (${q.question_count} câu)` : '';
+          opt.textContent = `${q.title}${countInfo}`;
+          this.dom.adminQuizSelect.appendChild(opt);
+        });
+
+        // Chọn bài thi mục tiêu nếu được truyền vào, hoặc bài thi đầu tiên
+        if (targetQuizId) {
+          this.dom.adminQuizSelect.value = String(targetQuizId);
+        } else if (!this.dom.adminQuizSelect.value && this.quizzes.length > 0) {
+          this.dom.adminQuizSelect.value = String(this.quizzes[0].id);
+        }
+      }
+    }
+
+    const currentQuizId = this.dom.adminQuizSelect?.value || targetQuizId || (this.quizzes[0]?.id);
+    if (currentQuizId) {
+      await this.loadAdminQuestions(currentQuizId);
+    }
+
+    // Focus vào ô nội dung câu hỏi
+    if (this.dom.adminQText) {
+      setTimeout(() => {
+        this.dom.adminQText.focus();
+      }, 150);
+    }
+
+    if (targetQuizId) {
+      const selected = this.quizzes.find(q => q.id === Number(targetQuizId));
+      if (selected) {
+        this.showAdminAlert(`Đang chọn bài thi: "${selected.title}". Hãy nhập nội dung câu hỏi bên dưới!`);
+      }
+    }
+  }
+
+  /**
+   * Tải danh sách câu hỏi của một bài trắc nghiệm cụ thể vào bảng Admin
+   * @param {number|string} quizId
+   */
+  async loadAdminQuestions(quizId) {
+    if (!quizId) {
+      this.adminQuestions = [];
+      this.renderAdminQuestions();
+      return;
+    }
+
+    const res = await api.getQuizQuestions(quizId);
+    let fetched = [];
+
+    if (res.ok && res.data) {
+      if (Array.isArray(res.data)) {
+        fetched = res.data;
+      } else if (Array.isArray(res.data.questions)) {
+        fetched = res.data.questions;
+      }
+    }
+
+    this.adminQuestions = fetched.map(q => {
+      let parsedOptions = [];
+      try {
+        parsedOptions = typeof q.options === 'string' ? JSON.parse(q.options) : (Array.isArray(q.options) ? q.options : []);
+      } catch (e) {
+        parsedOptions = [];
+      }
+      return {
+        id: q.id,
+        quiz_id: q.quiz_id,
+        question: q.question,
+        options: parsedOptions,
+        correct: Number(q.correct),
+        explanation: q.explanation
+      };
+    });
+
+    // Cập nhật nhãn bộ lọc bài thi
+    const selected = this.quizzes.find(q => q.id === Number(quizId));
+    if (this.dom.adminQuizFilterLabel) {
+      this.dom.adminQuizFilterLabel.textContent = selected 
+        ? `Đang xem: ${selected.title}` 
+        : `Bài thi #${quizId}`;
+    }
+
+    this.renderAdminQuestions();
+  }
+
+  /**
    * Render danh sách câu hỏi trong bảng Quản trị
    */
   renderAdminQuestions() {
+    if (!this.dom.adminQuestionsList) return;
     this.dom.adminQuestionsList.innerHTML = '';
     const letters = ['A', 'B', 'C', 'D'];
-    this.dom.adminQCount.textContent = this.questions.length;
+    const list = this.adminQuestions || [];
 
-    this.questions.forEach((q, index) => {
+    if (this.dom.adminQCount) {
+      this.dom.adminQCount.textContent = list.length;
+    }
+
+    if (list.length === 0) {
+      this.dom.adminQuestionsList.innerHTML = `
+        <div style="text-align: center; padding: 35px 20px; color: var(--text-sub);">
+          <p style="font-size: 1.5rem; margin-bottom: 8px;">📭</p>
+          <p style="font-weight: 600; color: var(--text-main);">Chưa có câu hỏi nào cho bài thi này.</p>
+          <p style="font-size: 0.85rem; margin-top: 4px;">Hãy điền form bên trái để thêm câu hỏi đầu tiên!</p>
+        </div>
+      `;
+      return;
+    }
+
+    list.forEach((q, index) => {
       const item = document.createElement('div');
       item.className = 'admin-q-item';
 
@@ -879,9 +1029,15 @@ export class QuizManager {
   }
 
   /**
-   * Xử lý Thêm câu hỏi mới từ Giảng viên
+   * Xử lý Thêm câu hỏi mới từ Giảng viên vào bài trắc nghiệm đã chọn
    */
   async handleAddQuestion() {
+    const quizId = parseInt(this.dom.adminQuizSelect?.value, 10);
+    if (isNaN(quizId) || quizId <= 0) {
+      alert('Vui lòng chọn bài trắc nghiệm bạn muốn thêm câu hỏi!');
+      return;
+    }
+
     const qText = this.dom.adminQText.value.trim();
     const optA = this.dom.adminOptA.value.trim();
     const optB = this.dom.adminOptB.value.trim();
@@ -896,6 +1052,7 @@ export class QuizManager {
     }
 
     const questionData = {
+      quiz_id: quizId,
       question: qText,
       options: [optA, optB, optC, optD],
       correct: correctIdx,
@@ -905,12 +1062,33 @@ export class QuizManager {
     const res = await api.addQuestion(questionData);
 
     if (res.ok && res.data.success) {
-      // Nạp lại danh sách từ server SQLite
-      await this.loadQuestions();
-      this.dom.formAddQuestion.reset();
-      this.renderAdminQuestions();
-      this.showAdminAlert(`Đã thêm thành công câu hỏi vào CSDL SQLite!`);
+      const currentSelectedQuizId = this.dom.adminQuizSelect.value;
+
+      // Reset các trường nhập liệu
+      this.dom.adminQText.value = '';
+      this.dom.adminOptA.value = '';
+      this.dom.adminOptB.value = '';
+      this.dom.adminOptC.value = '';
+      this.dom.adminOptD.value = '';
+      this.dom.adminQExplanation.value = '';
+
+      // Tải lại câu hỏi cho bài thi hiện tại
+      await this.loadAdminQuestions(currentSelectedQuizId);
+
+      // Cập nhật lại số lượng câu hỏi trên trang chủ và trong dropdown
+      await this.loadQuizzes();
+      if (this.dom.adminQuizSelect) {
+        this.dom.adminQuizSelect.value = currentSelectedQuizId;
+      }
+
+      const selected = this.quizzes.find(q => q.id === Number(currentSelectedQuizId));
+      const quizTitle = selected ? `"${selected.title}"` : 'bài thi';
+
+      this.showAdminAlert(`Đã thêm thành công câu hỏi vào ${quizTitle}!`);
       this.playSound('correct');
+
+      // Tự động focus lại ô câu hỏi để tiện nhập câu tiếp theo
+      this.dom.adminQText.focus();
     } else {
       alert(res.data?.message || 'Không thể thêm câu hỏi!');
     }
@@ -920,18 +1098,17 @@ export class QuizManager {
    * Xóa một câu hỏi khỏi ngân hàng đề thi
    */
   async deleteQuestion(id, index) {
-    if (this.questions.length <= 1) {
-      alert('Ngân hàng đề thi phải giữ lại ít nhất 1 câu hỏi!');
-      return;
-    }
-
     if (confirm(`Bạn có chắc muốn xóa câu hỏi số ${index + 1} không?`)) {
       const res = await api.deleteQuestion(id);
 
       if (res.ok && res.data.success) {
-        await this.loadQuestions();
-        this.renderAdminQuestions();
-        this.showAdminAlert('Đã xóa câu hỏi khỏi CSDL SQLite.');
+        const currentSelectedQuizId = this.dom.adminQuizSelect?.value;
+        await this.loadAdminQuestions(currentSelectedQuizId);
+        await this.loadQuizzes();
+        if (this.dom.adminQuizSelect && currentSelectedQuizId) {
+          this.dom.adminQuizSelect.value = currentSelectedQuizId;
+        }
+        this.showAdminAlert('Đã xóa câu hỏi khỏi bài trắc nghiệm.');
         this.playSound('click');
       } else {
         alert(res.data?.message || 'Không thể xóa câu hỏi!');
@@ -947,9 +1124,10 @@ export class QuizManager {
       const res = await api.resetQuestions();
 
       if (res.ok && res.data.success) {
-        await this.loadQuestions();
-        this.renderAdminQuestions();
-        this.showAdminAlert('Đã khôi phục bộ 10 câu hỏi mặc định trong SQLite!');
+        const currentSelectedQuizId = this.dom.adminQuizSelect?.value;
+        await this.loadAdminQuestions(currentSelectedQuizId);
+        await this.loadQuizzes();
+        this.showAdminAlert('Đã khôi phục bộ 10 câu hỏi mặc định!');
         this.playSound('correct');
       } else {
         alert(res.data?.message || 'Không thể khôi phục câu hỏi!');

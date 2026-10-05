@@ -159,9 +159,12 @@ class App {
 
       // Admin Screen
       btnAdminToQuiz: document.getElementById('btn-admin-to-quiz'),
+      btnAdminToHome: document.getElementById('btn-admin-to-home'),
       adminAlert: document.getElementById('admin-alert'),
       adminAlertText: document.getElementById('admin-alert-text'),
       formAddQuestion: document.getElementById('form-add-question'),
+      adminQuizSelect: document.getElementById('admin-quiz-select'),
+      adminQuizFilterLabel: document.getElementById('admin-quiz-filter-label'),
       adminQText: document.getElementById('admin-q-text'),
       adminOptA: document.getElementById('admin-opt-a'),
       adminOptB: document.getElementById('admin-opt-b'),
@@ -195,13 +198,22 @@ class App {
       });
     }
 
+    // Nút quay lại Danh sách bài thi từ màn hình Admin
+    if (this.dom.btnAdminToHome) {
+      this.dom.btnAdminToHome.addEventListener('click', () => {
+        this.quiz.playSound('click');
+        this.showScreen('start');
+        this.quiz.loadQuizzes();
+      });
+    }
+
     // 3. Gắn sự kiện nút Quản trị trên Header (Giảng viên)
     if (this.dom.btnHeaderAdmin) {
       this.dom.btnHeaderAdmin.addEventListener('click', () => {
         this.quiz.playSound('click');
         this.quiz.clearIntervalTimer();
         this.showScreen('admin');
-        this.quiz.renderAdminQuestions();
+        this.quiz.openAdminScreen();
       });
     }
 

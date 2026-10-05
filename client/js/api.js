@@ -96,6 +96,30 @@ export const api = {
   },
 
   /**
+   * Gọi API Thêm câu hỏi theo quiz_id (POST /api/quizzes/:id/questions)
+   * @param {number|string} quizId - ID bài trắc nghiệm
+   * @param {Object} questionData - { question, options, correct, explanation }
+   */
+  async addQuestionToQuiz(quizId, questionData) {
+    try {
+      const response = await fetch(`${API_BASE}/quizzes/${quizId}/questions`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(questionData)
+      });
+      const data = await response.json();
+      return { ok: response.ok, status: response.status, data };
+    } catch (error) {
+      console.warn(`[API] Lỗi khi thêm câu hỏi vào bài thi [${quizId}]:`, error);
+      return {
+        ok: false,
+        status: 0,
+        data: { success: false, message: 'Không thể thêm câu hỏi vào bài thi!' }
+      };
+    }
+  },
+
+  /**
    * Gọi API Xóa câu hỏi (Giảng viên)
    * @param {number|string} id - ID câu hỏi
    */

@@ -2143,9 +2143,40 @@ body {
   gap: 4px;
 }
 
-.btn-select-quiz {
+.quiz-card-actions {
+  display: flex;
+  gap: 10px;
   width: 100%;
   margin-top: auto;
+}
+
+.quiz-card-actions .btn-select-quiz {
+  flex: 1;
+}
+
+.quiz-card-actions .btn-add-q-to-quiz {
+  padding: 10px 14px;
+  font-size: 0.84rem;
+  font-weight: 600;
+  white-space: nowrap;
+  background: var(--bg-hover);
+  border: 1px solid var(--bg-card-border);
+  color: var(--text-main);
+  border-radius: var(--radius-sm);
+  cursor: pointer;
+  transition: all var(--transition-fast);
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 4px;
+}
+
+.quiz-card-actions .btn-add-q-to-quiz:hover {
+  background: var(--primary);
+  color: #ffffff;
+  border-color: var(--primary);
+  transform: translateY(-2px);
+  box-shadow: 0 4px 12px var(--primary-glow);
 }
 
 /* Quiz Current Header in Play Screen */
