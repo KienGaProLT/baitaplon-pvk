@@ -200,6 +200,9 @@ export class QuizManager {
           <button type="button" class="btn-add-q-to-quiz" data-id="${quiz.id}" title="Thêm câu hỏi vào bài thi này">
             <span>➕ Thêm Câu Hỏi</span>
           </button>
+          <button type="button" class="btn-delete-quiz" data-id="${quiz.id}" title="Xóa bài trắc nghiệm này">
+            <span>🗑️ Xóa</span>
+          </button>
         </div>
       `;
 
@@ -220,9 +223,46 @@ export class QuizManager {
         });
       }
 
+      const btnDelete = card.querySelector('.btn-delete-quiz');
+      if (btnDelete) {
+        btnDelete.addEventListener('click', (e) => {
+          e.stopPropagation();
+          this.handleDeleteQuiz(quiz.id, quiz.title);
+        });
+      }
+
       this.dom.quizzesGrid.appendChild(card);
     });
   }
+
+  /**
+   * Xử lý xóa bài trắc nghiệm (DELETE /api/quizzes/:id)
+   * Có hộp thoại confirm xác nhận trước khi xóa và tự động tải lại trang sau khi xóa thành công
+   * @param {number|string} quizId - ID bài trắc nghiệm
+   * @param {string} quizTitle - Tên bài trắc nghiệm
+   */
+  async handleDeleteQuiz(quizId, quizTitle = '') {
+    const titleText = quizTitle ? `"${quizTitle}"` : `mã #${quizId}`;
+    const confirmed = confirm(`Bạn có chắc chắn muốn xóa bài trắc nghiệm ${titleText} không?\n\nLưu ý: Hành động này sẽ xóa toàn bộ câu hỏi và kết quả làm bài liên quan.`);
+    if (!confirmed) return;
+
+    try {
+      this.initAudioContext();
+      this.playSound('click');
+
+      const res = await api.deleteQuiz(quizId);
+      if (res.ok && res.data && res.data.success) {
+        alert(res.data.message || 'Xóa bài trắc nghiệm thành công!');
+        window.location.reload();
+      } else {
+        alert(res.data?.message || 'Không thể xóa bài trắc nghiệm trên máy chủ!');
+      }
+    } catch (error) {
+      console.error('Lỗi khi xóa bài trắc nghiệm:', error);
+      alert('Đã xảy ra lỗi khi thực hiện xóa bài trắc nghiệm!');
+    }
+  }
+
 
   /**
    * 2. Chọn một bài trắc nghiệm và tải câu hỏi theo quiz_id (GET /api/quizzes/:id/questions)

@@ -163,4 +163,63 @@ router.post('/', async (req, res) => {
   }
 });
 
+/**
+ * 4. DELETE /api/quizzes/:id
+ * Xóa bài trắc nghiệm và toàn bộ dữ liệu liên quan để tránh lỗi khóa ngoại (Foreign Key)
+ * Thứ tự xóa tuần tự: quiz_results -> questions -> quizzes
+ */
+router.delete('/:id', async (req, res) => {
+  try {
+    const quizId = parseInt(req.params.id, 10);
+    if (isNaN(quizId)) {
+      return res.status(400).json({
+        success: false,
+        message: 'Mã bài trắc nghiệm không hợp lệ!'
+      });
+    }
+
+    const pool = await getPool();
+
+    // Kiểm tra xem bài trắc nghiệm có tồn tại không
+    const checkResult = await pool.request()
+      .input('quizId', sql.Int, quizId)
+      .query('SELECT id, title FROM quizzes WHERE id = @quizId');
+
+    if (checkResult.recordset.length === 0) {
+      return res.status(404).json({
+        success: false,
+        message: 'Không tìm thấy bài trắc nghiệm cần xóa!'
+      });
+    }
+
+    const quizTitle = checkResult.recordset[0].title;
+
+    // 1. Xóa tất cả kết quả thi thuộc bài trắc nghiệm trong bảng quiz_results
+    await pool.request()
+      .input('quizId', sql.Int, quizId)
+      .query('DELETE FROM quiz_results WHERE quiz_id = @quizId');
+
+    // 2. Xóa tất cả các câu hỏi thuộc bài trắc nghiệm trong bảng questions
+    await pool.request()
+      .input('quizId', sql.Int, quizId)
+      .query('DELETE FROM questions WHERE quiz_id = @quizId');
+
+    // 3. Xóa bài trắc nghiệm trong bảng quizzes
+    await pool.request()
+      .input('quizId', sql.Int, quizId)
+      .query('DELETE FROM quizzes WHERE id = @quizId');
+
+    return res.json({
+      success: true,
+      message: `Đã xóa bài trắc nghiệm "${quizTitle}" thành công!`
+    });
+  } catch (error) {
+    console.error('Lỗi DELETE /api/quizzes/:id:', error);
+    return res.status(500).json({
+      success: false,
+      message: 'Không thể xóa bài trắc nghiệm: ' + error.message
+    });
+  }
+});
+
 module.exports = router;

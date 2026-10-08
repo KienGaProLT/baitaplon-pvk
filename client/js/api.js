@@ -241,5 +241,27 @@ export const api = {
         data: { success: false, message: 'Không thể gửi yêu cầu tạo bài trắc nghiệm!' }
       };
     }
+  },
+
+  /**
+   * 5. Gọi API Xóa bài trắc nghiệm (DELETE /api/quizzes/:id)
+   * @param {number|string} id - ID bài trắc nghiệm cần xóa
+   */
+  async deleteQuiz(id) {
+    try {
+      const response = await fetch(`${API_BASE}/quizzes/${id}`, {
+        method: 'DELETE'
+      });
+      const data = await response.json();
+      return { ok: response.ok, status: response.status, data };
+    } catch (error) {
+      console.warn(`[API] Lỗi khi xóa bài trắc nghiệm [${id}]:`, error);
+      return {
+        ok: false,
+        status: 0,
+        data: { success: false, message: 'Không thể kết nối đến máy chủ để xóa bài trắc nghiệm!' }
+      };
+    }
   }
 };
+

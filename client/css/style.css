@@ -2179,6 +2179,32 @@ body {
   box-shadow: 0 4px 12px var(--primary-glow);
 }
 
+.quiz-card-actions .btn-delete-quiz {
+  padding: 10px 14px;
+  font-size: 0.84rem;
+  font-weight: 600;
+  white-space: nowrap;
+  background: rgba(239, 68, 68, 0.1);
+  border: 1px solid rgba(239, 68, 68, 0.25);
+  color: #ef4444;
+  border-radius: var(--radius-sm);
+  cursor: pointer;
+  transition: all var(--transition-fast);
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 4px;
+}
+
+.quiz-card-actions .btn-delete-quiz:hover {
+  background: #ef4444;
+  color: #ffffff;
+  border-color: #ef4444;
+  transform: translateY(-2px);
+  box-shadow: 0 4px 12px rgba(239, 68, 68, 0.35);
+}
+
+
 /* Quiz Current Header in Play Screen */
 .quiz-current-header {
   display: flex;
